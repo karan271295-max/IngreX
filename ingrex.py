@@ -457,6 +457,11 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 .envbox{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:9px 11px;
   border:1px solid var(--line);border-radius:8px;background:var(--line2);color:var(--ink);
   resize:vertical;margin-top:4px}
+.vform{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.vform label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:650;color:var(--mut)}
+.vform label.full{grid-column:1/-1}
+.vform input,.vform select{font-size:13px;font-weight:400;color:var(--ink)}
+@media(max-width:680px){.vform{grid-template-columns:1fr 1fr}}
 /* ingredient detail two-column: suppliers left, trend + facts right */
 .igrid{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
 .iside{position:sticky;top:66px}
@@ -1235,6 +1240,25 @@ def view_admin(con):
           <tbody>{inv_rows}</tbody></table></div>
       </div>
       <div class='panel pad'>
+        <div class=ph><h3>Add a supplier</h3></div>
+        <div class=metaline style='margin:8px 0 14px'>Add a supplier and its registration details.
+          It appears in the Suppliers directory immediately.</div>
+        <form method=post action='/admin/vendor'>
+          <div class=vform>
+            <label>Company name<input name=name required maxlength=140 placeholder='e.g. Acme Nutra Pvt Ltd'></label>
+            <label>Type<select name=kind>{"".join(f"<option>{k}</option>" for k in VENDOR_KINDS)}</select></label>
+            <label>Contact person<input name=poc maxlength=80></label>
+            <label>Phone<input name=phone maxlength=40></label>
+            <label>Email<input name=email maxlength=140></label>
+            <label>GSTIN<input name=gst maxlength=15 style='text-transform:uppercase'></label>
+            <label>State<input name=state maxlength=60></label>
+            <label>Pincode<input name=pincode maxlength=10></label>
+            <label class=full>Address<input name=address maxlength=200></label>
+          </div>
+          <button style='margin-top:14px'>Add supplier</button>
+        </form>
+      </div>
+      <div class='panel pad'>
         <div class=ph><h3>Keep users across deploys</h3></div>
         <div class=metaline style='margin:8px 0 14px'>Free hosting resets the database on every
           deploy, so codes created here are temporary. Paste these into your host's
@@ -1960,6 +1984,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("UPDATE invite SET revoked=1 WHERE code=? AND is_admin=0", (code,))
                 con.commit()
                 return self._redirect("/admin")
+            if path == "/admin/vendor" and admin:
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                name = g("name")[:140]
+                if not name:
+                    return self._redirect("/admin")
+                kind = g("kind") if g("kind") in VENDOR_KINDS else "Manufacturer"
+                row = con.execute("SELECT id FROM vendor WHERE name=?", (name,)).fetchone()
+                if row:
+                    vid = row["id"]
+                else:
+                    cur = con.execute(
+                        "INSERT INTO vendor(name,kind,city,country,gst,docs,poc,phone,"
+                        "email,address,state,pincode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (name, kind, g("state") or "India", "India", g("gst").upper()[:15], "",
+                         g("poc")[:80], g("phone")[:40], g("email")[:140], g("address")[:200],
+                         g("state")[:60], g("pincode")[:10]))
+                    con.commit()
+                    vid = cur.lastrowid
+                return self._redirect(f"/vendor/{vid}")
             if path == "/admin/kick" and admin:
                 # remove an active user: revoke their code (logs them out) + drop presence
                 code = urllib.parse.parse_qs(body).get("code", [""])[0]
