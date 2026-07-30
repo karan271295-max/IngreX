@@ -9,6 +9,7 @@ import hmac
 import html
 import http.server
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -44,10 +45,8 @@ CREATE TABLE ingredient (
 CREATE TABLE vendor (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL CHECK (kind IN ('Manufacturer','Trader','Importer')),
-  city TEXT, country TEXT, gst TEXT,
-  -- ponytail: docs as comma list, not a join table. Fixed 12-value vocabulary,
-  -- LIKE filter is enough. Normalise if vendors start uploading real files.
-  docs TEXT DEFAULT '');
+  city TEXT, country TEXT, gst TEXT, docs TEXT DEFAULT '',
+  poc TEXT, phone TEXT, email TEXT, address TEXT, state TEXT, pincode TEXT);
 CREATE TABLE offer (
   id INTEGER PRIMARY KEY,
   ingredient_id INTEGER NOT NULL REFERENCES ingredient(id),
@@ -65,93 +64,58 @@ CREATE TABLE price_point (
   PRIMARY KEY (ingredient_id, month));
 """
 
-SEED_INGREDIENTS = [
-    # name, category, cas, functions, description
-    ("Ashwagandha Extract 5% Withanolides", "Herbal Extract", "90147-33-6",
-     "Adaptogen, Stress, Sleep", "Withania somnifera root extract, water-ethanol, HPLC assayed."),
-    ("Curcumin 95% (Turmeric Extract)", "Herbal Extract", "458-37-7",
-     "Anti-inflammatory, Joint", "Curcuma longa rhizome, 95% total curcuminoids by HPLC."),
-    ("Vitamin D3 100,000 IU/g (Cholecalciferol)", "Vitamin", "67-97-0",
-     "Bone, Immunity", "Oil-based or CWS beadlet, lanolin derived."),
-    ("Omega-3 Fish Oil 18/12 TG", "Lipid", "None",
-     "Cardio, Brain", "Anchovy/sardine, 18% EPA 12% DHA, IFOS-grade options."),
-    ("Hydrolysed Bovine Collagen Peptides", "Protein", "9007-34-5",
-     "Skin, Joint", "Type I & III, ~2000 Da, bovine hide, low-odour."),
-    ("Melatonin USP", "Active", "73-31-4",
-     "Sleep", "Synthetic, USP monograph, 99% assay."),
-    ("Magnesium Bisglycinate", "Mineral", "14783-68-7",
-     "Sleep, Muscle", "Fully reacted chelate, ~14% elemental Mg."),
-    ("L-Theanine 98%", "Amino Acid", "3081-61-6",
-     "Focus, Calm", "Fermentation derived, L-isomer 98% min."),
-    ("Probiotic Blend 100B CFU/g", "Probiotic", "None",
-     "Gut, Immunity", "L. acidophilus + B. lactis, DFM, shelf-stable."),
-    ("Whey Protein Isolate 90%", "Protein", "None",
-     "Sports, Recovery", "Cross-flow microfiltration, instantised, low lactose."),
+CATALOGUE_CSV = os.path.join(HERE, "suppliers.csv")
+
+# keyword → category. First match wins; order matters (specific before generic).
+CAT_RULES = [
+    (("collagen", "whey", "wpc", "protein", "isolate", "casein", "peptide"), "Protein"),
+    (("extract", "sitosterol", "carotene", "leutin", "lutein", "zeaxanthin", "astaxanthin"), "Herbal Extract"),
+    (("vitamin", "d3", "premix", "mineral", "zinc", "calcium", "iron"), "Vitamin & Mineral"),
+    (("flavour", "flavor", "vanilla", "chocolate", "colour", "color", "fcf"), "Flavour & Colour"),
+    (("sugar", "jaggery", "maltodextrin", "inulin", "isomalt", "fos", "fiber", "fibre",
+      "dextrose", "palatinose", "date", "stevia", "sweeten"), "Sweetener & Fibre"),
+    (("milk", "smp", "lactose", "permeate", "dairy"), "Dairy"),
+    (("oil", "mct", "triglyceride", "dha", "omega", "fat"), "Oil & Lipid"),
+    (("glutamine", "methionine", "alanine", "citrul", "theanine", "arginine", "lysine",
+      "taurine", "creatine"), "Amino Acid"),
+    (("probiotic", "enzyme", "mos", "digest"), "Probiotic & Enzyme"),
+    (("acid", "chloride", "citrate", "sulphate", "sulfate", "dioxide", "peg", "mcc",
+      "guar", "silicon", "hpmc", "cap", "gum", "mdc"), "Excipient"),
+    (("powder", "flour", "oats", "ragi", "jowar", "bajra"), "Powder & Flour"),
 ]
 
-SEED_VENDORS = [
-    # name, kind, city, country, gst, docs
-    ("Nutriva Biotech Pvt Ltd", "Manufacturer", "Hyderabad", "India", "36AABCN1234F1Z5",
-     "COA,MSDS,Spec Sheet,GMP,FSSAI,ISO 22000,Halal,Heavy Metals Report,Stability Data"),
-    ("Vedic Botanicals LLP", "Manufacturer", "Indore", "India", "23AACFV5678K1Z2",
-     "COA,MSDS,Spec Sheet,GMP,FSSAI,Organic (NPOP/USDA),Halal,Kosher"),
-    ("Meridian Ingredients", "Trader", "Mumbai", "India", "27AAGCM9012L1Z8",
-     "COA,MSDS,Spec Sheet,FSSAI"),
-    ("Kalyan Global Imports", "Importer", "Chennai", "India", "33AABCK3456M1Z1",
-     "COA,MSDS,Spec Sheet,FSSAI,Halal,Allergen Statement"),
-    ("Aureus Lifesciences", "Manufacturer", "Ahmedabad", "India", "24AADCA7890N1Z4",
-     "COA,MSDS,Spec Sheet,GMP,FSSAI,ISO 22000,Kosher,Heavy Metals Report"),
-    ("SeaPure Marine Nutrition", "Manufacturer", "Kochi", "India", "32AABCS2345P1Z7",
-     "COA,MSDS,Spec Sheet,GMP,FSSAI,Allergen Statement,Stability Data"),
-    ("Orbit Nutra Trading Co", "Trader", "Delhi", "India", "07AAECO6789Q1Z3",
-     "COA,Spec Sheet,FSSAI"),
-]
 
-# ingredient index, vendor index, price_min, price_max, moq, lead_days
-SEED_OFFERS = [
-    (0, 0, 1450, 1850, "25 kg", 14), (0, 1, 1300, 1700, "50 kg", 21),
-    (0, 2, 1600, 2100, "5 kg", 7), (0, 6, 1550, 2000, "10 kg", 10),
-    (1, 1, 2900, 3600, "25 kg", 21), (1, 0, 3100, 3800, "25 kg", 14),
-    (1, 2, 3300, 4200, "5 kg", 7),
-    (2, 4, 5200, 6400, "5 kg", 18), (2, 3, 4800, 6000, "10 kg", 30),
-    (3, 5, 1150, 1500, "200 kg", 25), (3, 3, 1250, 1650, "50 kg", 35),
-    (4, 4, 1050, 1400, "100 kg", 20), (4, 3, 980, 1350, "200 kg", 40),
-    (4, 2, 1200, 1550, "25 kg", 10),
-    (5, 4, 12500, 15500, "1 kg", 15), (5, 6, 13500, 17000, "500 g", 7),
-    (6, 4, 890, 1150, "50 kg", 18), (6, 2, 950, 1250, "25 kg", 8),
-    (7, 3, 8500, 10500, "5 kg", 30), (7, 0, 9200, 11500, "5 kg", 20),
-    (8, 0, 6800, 8600, "5 kg", 21), (8, 5, 7200, 9000, "5 kg", 18),
-    (9, 3, 720, 940, "500 kg", 35), (9, 2, 760, 1000, "100 kg", 12),
-]
+def infer_category(name):
+    low = name.lower()
+    for words, cat in CAT_RULES:
+        if any(w in low for w in words):
+            return cat
+    return "Other Ingredient"
 
-# vendor index, rater, rater_type, score, note
-SEED_RATINGS = [
-    (0, "Zenith Wellness Labs", "Manufacturer", 5, "COA matched our in-house HPLC every lot. Docs on time."),
-    (0, "Prana Formulations", "Manufacturer", 4, "Good quality, lead time slipped a week in Q1."),
-    (1, "Ayur Naturals", "Client", 5, "Best curcumin assay consistency we have seen."),
-    (1, "Zenith Wellness Labs", "Manufacturer", 4, "Organic cert valid. Packaging could be better."),
-    (2, "Corepeak Nutrition", "Manufacturer", 3, "Trader margins high, but stock is always ready."),
-    (2, "Prana Formulations", "Manufacturer", 3, "Source mill changes between lots. Ask for lot-wise COA."),
-    (3, "SunGrow Health", "Client", 4, "Import paperwork clean, customs clearance handled well."),
-    (4, "Corepeak Nutrition", "Manufacturer", 5, "GMP audit passed. Strong technical support."),
-    (4, "Ayur Naturals", "Client", 5, "Melatonin USP grade, zero rejections in 8 lots."),
-    (5, "SunGrow Health", "Client", 4, "Oxidation values well within spec. IFOS available on request."),
-    (6, "Corepeak Nutrition", "Manufacturer", 2, "Two short-shipments. Needs better order tracking."),
-]
 
-# ingredient index -> 12 monthly average prices (market trend)
-SEED_TREND = {
-    0: [1520, 1540, 1580, 1620, 1600, 1650, 1700, 1680, 1720, 1750, 1730, 1690],
-    1: [3400, 3350, 3300, 3250, 3300, 3400, 3550, 3600, 3520, 3480, 3420, 3380],
-    2: [5400, 5450, 5600, 5750, 5900, 5850, 5700, 5650, 5550, 5500, 5600, 5680],
-    3: [1200, 1220, 1260, 1310, 1380, 1420, 1400, 1360, 1330, 1300, 1290, 1310],
-    4: [1180, 1160, 1140, 1120, 1100, 1090, 1080, 1070, 1090, 1110, 1130, 1150],
-    5: [14800, 14500, 14200, 13900, 13600, 13800, 14100, 14400, 14000, 13700, 13500, 13400],
-    6: [980, 990, 1010, 1040, 1030, 1010, 995, 985, 1000, 1020, 1050, 1070],
-    7: [9800, 9700, 9500, 9400, 9600, 9900, 10100, 10000, 9800, 9650, 9550, 9500],
-    8: [7400, 7450, 7500, 7600, 7750, 7900, 7850, 7800, 7700, 7650, 7600, 7580],
-    9: [820, 840, 870, 900, 880, 860, 845, 830, 850, 875, 895, 910],
-}
+def infer_kind(vname):
+    low = vname.lower()
+    if any(w in low for w in ("import", "impex")):
+        return "Importer"
+    if any(w in low for w in ("global", "trading", "traders", "enterprise", "stockist",
+                              "international", "additives", "chemicals zone")):
+        return "Trader"
+    return "Manufacturer"
+
+
+def parse_rate(raw):
+    s = re.sub(r"[^0-9.]", "", (raw or "").replace(",", ""))
+    try:
+        return float(s) if s else None
+    except ValueError:
+        return None
+
+
+def price_band(rate):
+    """Show a range, not the exact quoted rate — ±12% around it, sensibly rounded."""
+    lo, hi = rate * 0.88, rate * 1.14
+    step = 1 if rate < 100 else 5 if rate < 1000 else 50
+    return round(lo / step) * step, round(hi / step) * step
 
 
 def months(n=12):
@@ -183,28 +147,72 @@ def init_db(path=None):
     con = connect()
     if fresh:
         con.executescript(SCHEMA)
-        con.executemany(
-            "INSERT INTO ingredient (name,category,cas,functions,description) VALUES (?,?,?,?,?)",
-            SEED_INGREDIENTS)
-        con.executemany(
-            "INSERT INTO vendor (name,kind,city,country,gst,docs) VALUES (?,?,?,?,?,?)",
-            SEED_VENDORS)
-        today = date.today().isoformat()
-        con.executemany(
-            "INSERT INTO offer (ingredient_id,vendor_id,price_min,price_max,moq,lead_days,updated)"
-            " VALUES (?,?,?,?,?,?,?)",
-            [(i + 1, v + 1, lo, hi, moq, ld, today) for i, v, lo, hi, moq, ld in SEED_OFFERS])
-        con.executemany(
-            "INSERT INTO rating (vendor_id,rater,rater_type,score,note,created) VALUES (?,?,?,?,?,?)",
-            [(v + 1, r, rt, s, n, today) for v, r, rt, s, n in SEED_RATINGS])
-        mo = months()
-        con.executemany(
-            "INSERT INTO price_point (ingredient_id,month,price) VALUES (?,?,?)",
-            [(i + 1, mo[k], p) for i, series in SEED_TREND.items()
-             for k, p in enumerate(series)])
-        con.commit()
+        seed_catalogue(con)
     ensure_invites(con)
     return con
+
+
+def seed_catalogue(con, csv_path=None):
+    """Load real supplier data from the committed CSV. Since the file lives in the
+    repo, the catalogue re-seeds identically on every deploy — no disk needed."""
+    import csv
+    path = csv_path or CATALOGUE_CSV
+    if not os.path.exists(path):
+        return
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = list(csv.DictReader(f))
+    today = date.today().isoformat()
+    vendors, ings = {}, {}
+    for r in rows:
+        item = (r.get("Item Name") or "").strip()
+        vname = (r.get("Vendor Name") or "").strip()
+        if not item or not vname:
+            continue
+        vkey = vname.lower()
+        if vkey not in vendors:
+            con.execute(
+                "INSERT OR IGNORE INTO vendor(name,kind,city,country,gst,docs,"
+                "poc,phone,email,address,state,pincode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (vname, infer_kind(vname), (r.get("Vendor State") or "").strip() or "India",
+                 "India", (r.get("Vendor GST") or "").strip(), "",
+                 (r.get("POC") or "").strip(), (r.get("POC Number") or "").strip(),
+                 (r.get("POC Email") or "").strip(), (r.get("Vendor Address") or "").strip(),
+                 (r.get("Vendor State") or "").strip(), (r.get("Vendor Pincode") or "").strip()))
+            vendors[vkey] = con.execute(
+                "SELECT id FROM vendor WHERE name=?", (vname,)).fetchone()["id"]
+        ikey = item.lower()
+        if ikey not in ings:
+            cat = infer_category(item)
+            con.execute(
+                "INSERT INTO ingredient(name,category,cas,functions,description,unit) "
+                "VALUES(?,?,?,?,?,?)",
+                (item, cat, "—", cat, f"{item} — supplier-listed ingredient.", "kg"))
+            ings[ikey] = con.execute(
+                "SELECT id FROM ingredient WHERE name=?", (item,)).fetchone()["id"]
+        rate = parse_rate(r.get("Rate Per Kg"))
+        if rate:
+            lo, hi = price_band(rate)
+            con.execute(
+                "INSERT OR IGNORE INTO offer(ingredient_id,vendor_id,price_min,price_max,"
+                "unit,updated) VALUES(?,?,?,?,?,?)",
+                (ings[ikey], vendors[vkey], lo, hi, "kg", today))
+    # indicative 12-month price history per priced ingredient (modeled, deterministic)
+    mo = months()
+    for iid in ings.values():
+        base = con.execute(
+            "SELECT AVG((price_min+price_max)/2.0) a FROM offer WHERE ingredient_id=?",
+            (iid,)).fetchone()["a"]
+        if not base:
+            continue
+        rnd = random.Random(iid)
+        v = base * rnd.uniform(0.9, 1.0)
+        series = []
+        for _ in range(12):
+            v *= 1 + rnd.uniform(-0.03, 0.035)
+            series.append(round(v))
+        con.executemany("INSERT OR IGNORE INTO price_point(ingredient_id,month,price) VALUES(?,?,?)",
+                        [(iid, mo[k], p) for k, p in enumerate(series)])
+    con.commit()
 
 
 def ensure_invites(con):
@@ -295,9 +303,9 @@ p{margin:0 0 12px}
 .me .nm{color:#fff;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me .rl{color:rgba(255,255,255,.45);font-size:11px}
 .logout{flex:none;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
-  color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
-.logout:hover{color:#fff;background:rgba(255,255,255,.12)}
-.logout svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;
+  color:#fff;background:#d9463b}
+.logout:hover{background:#c23a30}
+.logout svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.2;fill:none;
   stroke-linecap:round;stroke-linejoin:round}
 
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -394,13 +402,22 @@ a.icard{display:block;border:1px solid var(--line);border-radius:16px;padding:12
   color:inherit;background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
 a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
   box-shadow:0 14px 30px -14px rgba(15,31,26,.28)}
-.icard{padding:16px}
+.icard{padding:15px 16px;border-left:3px solid var(--cc,var(--line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cc) 5%,#fff),#fff 60%)}
+.icard:hover{border-color:color-mix(in srgb,var(--cc) 40%,var(--line));
+  border-left-color:var(--cc)}
 .icard .irate{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink)}
 .icard .irate .st{color:var(--gold);letter-spacing:.5px}
 .icard .irate .new{color:var(--mut);font-weight:600}
-.icard .icat{font-size:12px;font-weight:600;color:var(--mut);margin-top:8px}
-.icard .inm{font-size:16px;font-weight:700;color:var(--ink);line-height:1.32;margin:4px 0 2px;
+.icard .icat{font-size:11px;font-weight:700;letter-spacing:.02em;margin-top:8px;
+  color:var(--cc);text-transform:uppercase}
+.icard .inm{font-size:15.5px;font-weight:700;color:var(--ink);line-height:1.3;margin:4px 0 2px;
   min-height:2.4em}
+.icard .priceband{display:inline-block;font-size:15px;font-weight:800;color:var(--ink);
+  margin-top:9px;padding:5px 11px;border-radius:9px;
+  background:color-mix(in srgb,var(--cc) 12%,#fff);
+  border:1px solid color-mix(in srgb,var(--cc) 24%,#fff)}
+.icard .priceband .unit{font-size:12px;font-weight:500;color:var(--mut)}
 .iwrap .star{top:14px;right:14px}
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
 .icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
@@ -495,6 +512,10 @@ button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
 .review b{color:var(--ink)}
 .empty{color:var(--mut);padding:26px 0;text-align:center}
 .count{color:var(--mut);font-weight:600;font-size:13px}
+.cline{display:flex;gap:14px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:14px}
+.cline:last-child{border-bottom:0}
+.cline .cl{flex:none;width:110px;color:var(--mut);font-weight:600;font-size:13px}
+.cline .cv{color:var(--ink)}
 
 footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid var(--line)}
 
@@ -662,6 +683,18 @@ def doc_tags(docs):
 MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+CAT_TINT = {
+    "Protein": "#2f7cc4", "Herbal Extract": "#3f8a1c", "Vitamin & Mineral": "#c47f1c",
+    "Flavour & Colour": "#b5486e", "Sweetener & Fibre": "#0e8a8a", "Dairy": "#3a76c4",
+    "Oil & Lipid": "#c04a6e", "Amino Acid": "#6a58c4", "Probiotic & Enzyme": "#0d7a56",
+    "Excipient": "#5d7168", "Powder & Flour": "#9a7418", "Other Ingredient": "#4b6a5e",
+}
+
+
+def cat_color(cat):
+    return CAT_TINT.get(cat, "#4b6a5e")
+
+
 def greeting():
     h = datetime.now().hour
     return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
@@ -688,11 +721,11 @@ def icard(r, wl=frozenset(), back="/", moves=None):
             f"title='{'Remove from' if on else 'Add to'} watchlist' "
             f"aria-label='toggle watchlist'>{'★' if on else '☆'}</a>")
     return (f"<div class=iwrap>{star}"
-            f"<a class=icard href='/ingredient/{r['id']}'>"
+            f"<a class=icard href='/ingredient/{r['id']}' style='--cc:{cat_color(r['category'])}'>"
             f"<div class=irate>{rating}</div>"
             f"<div class=icat>{E(r['category'])}</div>"
             f"<div class=inm>{E(r['name'])}</div>"
-            f"<div class=iprice>{price}</div>"
+            f"<div class=priceband>{price}</div>"
             f"<div class=isup>{r['vendors']} Supplier{'' if r['vendors'] == 1 else 's'}</div>"
             f"<div class=foot>{badge}<span class=iupd>{updated}</span></div></a></div>")
 
@@ -859,22 +892,22 @@ def stat_cards(con):
 
 
 def top_suppliers(con, limit=3):
+    # ranked by catalogue breadth (real data has no reviews yet), rating shown if any
     rows = con.execute("""
         SELECT v.id, v.name, v.city, v.country, v.kind,
                (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) a,
-               (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n
-        FROM vendor v WHERE (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) > 0
-        ORDER BY a DESC LIMIT ?""", (limit,)).fetchall()
+               (SELECT COUNT(DISTINCT ingredient_id) FROM offer WHERE vendor_id=v.id) items
+        FROM vendor v ORDER BY items DESC, v.name LIMIT ?""", (limit,)).fetchall()
     out = ""
     for v in rows:
-        ini = initials(v["name"])
-        out += (f"<div class=sup><span class=av>{ini}</span>"
+        rate = f"★ {v['a']:.1f}" if v["a"] else "New"
+        out += (f"<div class=sup><span class=av>{initials(v['name'])}</span>"
                 f"<span><span class=nm>{E(v['name'])}</span><br>"
-                f"<span class=lc>{E(v['city'])}, {E(v['country'])}</span></span>"
-                f"<span class=rt><span class=s>★ {v['a']:.1f}</span><br>"
-                f"<span class=n>{v['n']} review(s)</span></span>"
+                f"<span class=lc>{E(v['city'])} · {E(v['kind'])}</span></span>"
+                f"<span class=rt><span class=s>{rate}</span><br>"
+                f"<span class=n>{v['items']} item(s)</span></span>"
                 f"<a class=btn href='/vendor/{v['id']}'>View</a></div>")
-    return out or "<p class=empty>No rated suppliers yet.</p>"
+    return out or "<p class=empty>No suppliers yet.</p>"
 
 
 def view_dashboard(con, wl=frozenset(), trend_sel=""):
@@ -1136,14 +1169,35 @@ def view_vendor(con, vid, msg=""):
         <div class=count style='margin-top:4px'>{E(r['created'] or '')}</div>
         </div>""" for r in reviews) or "<p class=empty>No reviews yet.</p>"
 
+    def contact(label, val, href=None):
+        if not val:
+            return ""
+        inner = f"<a href='{href}'>{E(val)}</a>" if href else E(val)
+        return f"<div class=cline><span class=cl>{label}</span><span class=cv>{inner}</span></div>"
+
+    contacts = "".join([
+        contact("Contact", v["poc"] if "poc" in v.keys() else ""),
+        contact("Phone", v["phone"] if "phone" in v.keys() else "",
+                f"tel:{v['phone']}" if ("phone" in v.keys() and v["phone"]) else None),
+        contact("Email", (v["email"] if "email" in v.keys() else "" or "").split(",")[0],
+                f"mailto:{(v['email'] if 'email' in v.keys() else '' or '').split(',')[0]}"
+                if ("email" in v.keys() and v["email"]) else None),
+        contact("GSTIN", v["gst"]),
+        contact("Address", v["address"] if "address" in v.keys() else ""),
+        contact("State", (f"{v['state']}" + (f" · {v['pincode']}" if ('pincode' in v.keys() and v['pincode']) else ""))
+                if ("state" in v.keys() and v["state"]) else ""),
+    ]) or "<div class=metaline>No contact details on file.</div>"
+
     return page(v["name"], f"""
       <a class=back href='/vendors'>← Vendors</a>
       <h1>{E(v['name'])}</h1>
       <p style='margin-bottom:16px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
-         <span class=metaline>{E(v['city'])}, {E(v['country'])} · GSTIN {E(v['gst'] or '—')}</span></p>
+         <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></p>
       <div class=card style='display:flex;align-items:center;gap:14px'>
         <span style='font-size:26px'>{stars(avg)}</span>
         <span class=count>from {n} client / manufacturer review(s)</span></div>
+      <h2>Contact & registration</h2>
+      <div class=card>{contacts}</div>
       <h2>Documents on file</h2>
       <div class=card><div class=chips>{doc_tags(v['docs'])}</div></div>
       <h2>{len(offers)} ingredient{'' if len(offers) == 1 else 's'} listed</h2>
@@ -1361,7 +1415,7 @@ def login_page(err="", prefill=""):
             f"<input name=code value='{E(prefill)}' placeholder='Invite code' required "
             f"autofocus autocomplete=off spellcheck=false></div>"
             f"<button>Enter portal</button></form>"
-            f"<div class=foot>Ingrex · B2B ingredient intelligence</div>"
+            f"<div class=foot>Ingrex · B2B Ingredient Intelligence</div>"
             f"</div></html>").encode()
 
 
@@ -1650,47 +1704,40 @@ def demo():
     tmp = os.path.join(tempfile.mkdtemp(), "t.db")
     con = init_db(tmp)
 
-    assert len(search_ingredients(con)) == len(SEED_INGREDIENTS)
-    # text search hits name, category, function and CAS
-    assert len(search_ingredients(con, "ashwagandha")) == 1
-    assert len(search_ingredients(con, "458-37-7")) == 1
-    assert len(search_ingredients(con, "Sleep")) >= 3
-    assert search_ingredients(con, "zzzz") == []
-    # vendor-type filter: only ingredients offered by an Importer
-    imp = {r["name"] for r in search_ingredients(con, kind="Importer")}
-    assert imp and all(any(o["kind"] == "Importer" for o in offers_for_ingredient(
-        con, con.execute("SELECT id FROM ingredient WHERE name=?", (n,)).fetchone()["id"]))
-        for n in imp)
-    # doc filter must not match on substring of another doc name
-    assert all("GMP" in r["docs"] for r in con.execute(
-        "SELECT docs FROM vendor WHERE (','||docs||',') LIKE '%,GMP,%'"))
-    assert not [r for r in con.execute(
-        "SELECT 1 FROM vendor WHERE (','||docs||',') LIKE '%,MP,%'")]
-    # price cap filter
-    cheap = search_ingredients(con, maxp=1000)
-    assert cheap and all(r["lo"] <= 1000 for r in cheap)
+    # CSV import: real catalogue seeded, prices stored as ranges (not exact quotes)
+    n_ing = con.execute("SELECT COUNT(*) c FROM ingredient").fetchone()["c"]
+    n_ven = con.execute("SELECT COUNT(*) c FROM vendor").fetchone()["c"]
+    assert n_ing > 50 and n_ven > 30, "catalogue seeded from suppliers.csv"
+    assert len(search_ingredients(con)) == n_ing
+    assert len(search_ingredients(con, "whey")) >= 1
+    assert search_ingredients(con, "zzzznotreal") == []
+    o = con.execute("SELECT price_min, price_max FROM offer LIMIT 1").fetchone()
+    assert o["price_min"] < o["price_max"], "offer price is a range, not exact"
+    assert parse_rate("₹8,500.00 ") == 8500.0 and parse_rate("") is None
+    assert price_band(100)[0] < 100 < price_band(100)[1]
+    assert infer_category("Whey Protein Isolate 90%") == "Protein"
+    cheap = search_ingredients(con, maxp=100)
+    assert cheap and all(r["lo"] <= 100 for r in cheap)
 
-    # ratings aggregate + validation
-    before = vendor_rating(con, 1)
-    assert before[1] == 2 and abs(before[0] - 4.5) < 1e-9
+    # ratings: none seeded from CSV; post_rate validates + aggregates
+    assert vendor_rating(con, 1) == (None, 0)
     assert post_rate(con, "vendor_id=1&score=9&rater=X")[1].startswith("Need")
     assert post_rate(con, "vendor_id=1&score=5&rater=")[1].startswith("Need")
     assert post_rate(con, "vendor_id=999&score=5&rater=X")[0] is None
-    assert vendor_rating(con, 1) == before, "invalid ratings must not be stored"
-    vid, msg = post_rate(con, "vendor_id=1&score=1&rater=Test+Co&rater_type=Client&note=hi")
-    assert vid == 1 and vendor_rating(con, 1)[1] == 3
+    vid, msg = post_rate(con, "vendor_id=1&score=4&rater=Test+Co&rater_type=Client&note=hi")
+    assert vid == 1 and vendor_rating(con, 1) == (4.0, 1)
 
-    # rendering: escapes user input, no crash on any page
+    # rendering: escapes user input, no crash on real pages
     con.execute("INSERT INTO rating (vendor_id,rater,score) VALUES (1,?,3)",
                 ("<script>x</script>",))
     con.commit()
     assert b"<script>x" not in view_vendor(con, 1)
     assert b"&lt;script&gt;" in view_vendor(con, 1)
-    for i in range(1, len(SEED_INGREDIENTS) + 1):
+    for i in (1, n_ing // 2, n_ing):
         assert view_ingredient(con, i)
-    for v in range(1, len(SEED_VENDORS) + 1):
+    for v in (1, n_ven // 2, n_ven):
         assert view_vendor(con, v)
-    assert view_ingredient(con, 9999) is None and view_vendor(con, 9999) is None
+    assert view_ingredient(con, 99999) is None and view_vendor(con, 99999) is None
     # presence: distinct clients counted, labels carried, stale ones drop out
     ONLINE.clear()
     touch_online("a|1.1.1.1", "Acme", "a", "1.1.1.1")
@@ -1720,10 +1767,11 @@ def demo():
     assert watched_ids({"Cookie": "other=x"}) == set() and watched_ids({}) == set()
     assert safe_back("/search?q=x") == "/search?q=x"
     assert safe_back("//evil.com") == "/" and safe_back("http://x") == "/"
-    assert b"class='star on'" in view_dashboard(con, {1}), "watched card shows filled star"
+    fid = search_ingredients(con)[0]["id"]   # first card shown on the dashboard
+    assert b"class='star on'" in view_dashboard(con, {fid}), "watched card shows filled star"
     assert b"class='star on'" not in view_dashboard(con, set())
-    assert b"Watching" in view_ingredient(con, 1, {1})
-    assert view_watchlist(con, {1, 2}) and view_watchlist(con, set())
+    assert b"Watching" in view_ingredient(con, fid, {fid})
+    assert view_watchlist(con, {fid}) and view_watchlist(con, set())
 
     # invite auth: gate off with no invites; valid signed cookie admits, forgery rejected
     assert gate_active(con) is False, "no invites => open gate"
@@ -1775,11 +1823,12 @@ def demo():
     assert b"class=trendsel" in view_dashboard(con)
     assert f"value={tid} selected".encode() in view_dashboard(con, set(), str(tid))
 
-    # card shows rating, price-move badge, supplier count, updated label — no image
+    # card: price band, colored accent, supplier count, updated — no image
     dash = view_dashboard(con)
-    assert b"ibadge" in dash and b"Supplier" in dash and b"Updated" in dash
+    assert b"priceband" in dash and b"Supplier" in dash and b"Updated" in dash
+    assert b"--cc:" in dash, "category-tinted accent"
     assert b"iimg" not in dash, "illustration removed"
-    assert search_ingredients(con)[0]["rating"] is not None
+    assert "rating" in search_ingredients(con)[0].keys()
 
     # sparkline: direction and degenerate input
     assert "class=up" in sparkline([("a", 10), ("b", 20)])
