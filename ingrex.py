@@ -636,16 +636,11 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 /* liquid glass card */
 .glass{position:relative;width:100%;max-width:400px;padding:44px 38px 38px;
   border-radius:28px;overflow:hidden;
-  background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.04));
+  background:linear-gradient(135deg,rgba(255,255,255,.028),rgba(255,255,255,.008));
   backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
   border:1px solid rgba(255,255,255,.22);
   box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 -1px 0 rgba(255,255,255,.06) inset,
     0 30px 80px -20px rgba(0,0,0,.6),0 8px 24px -12px rgba(0,0,0,.5)}
-/* moving specular sheen */
-.glass::before{content:"";position:absolute;top:-60%;left:-30%;width:80%;height:220%;
-  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.28) 50%,transparent 70%);
-  transform:rotate(8deg);animation:sheen 7s ease-in-out infinite;pointer-events:none}
-@keyframes sheen{0%{left:-40%}55%,100%{left:130%}}
 
 .brand{font-size:34px;font-weight:800;letter-spacing:-.03em;color:#fff}
 .brand span{color:#4fe0a6}
@@ -671,7 +666,7 @@ button:hover{filter:brightness(1.06)}button:active{transform:translateY(1px)}
 .err{margin-bottom:16px;padding:11px 14px;font-size:13px;font-weight:600;color:#ffd7c2;
   background:rgba(214,90,40,.18);border:1px solid rgba(214,90,40,.4);border-radius:12px}
 .foot{margin-top:22px;font-size:12px;color:rgba(233,251,244,.5);text-align:center}
-@media(prefers-reduced-motion:reduce){.blob,.glass::before{animation:none}}
+@media(prefers-reduced-motion:reduce){.blob{animation:none}}
 @media(max-width:440px){.glass{padding:36px 26px}.brand{font-size:30px}}
 """
 
