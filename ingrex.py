@@ -248,90 +248,89 @@ def ensure_invites(con):
 
 CSS = """
 :root{
-  --ink:#0f1f1a;--body:#33443d;--mut:#6b7d75;--line:#e6ece8;--line2:#f0f4f1;
-  --bg:#f4f7f5;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#e7f4ee;
-  --sb:#20293a;--up:#c1531a;--down:#0d7a56;--gold:#d99a1c;
-  --shadow:0 1px 2px rgba(15,31,26,.04),0 4px 16px -8px rgba(15,31,26,.10);
-  --radius:14px;
+  --ink:#111512;--body:#3d4a44;--mut:#8a968f;--line:#ececef;--line2:#f5f6f5;
+  --bg:#fbfbfa;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#eef5f1;
+  --sb:#171c1a;--up:#bf5327;--down:#0d7a56;--gold:#c99a2e;
+  --shadow:0 1px 2px rgba(17,21,18,.04),0 1px 1px rgba(17,21,18,.03);
+  --radius:12px;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  font-size:15px;line-height:1.55;color:var(--body);background:var(--bg);
-  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",
+  Roboto,Helvetica,Arial,sans-serif;
+  font-size:13.5px;line-height:1.5;color:var(--body);background:var(--bg);letter-spacing:-.006em;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-variant-numeric:tabular-nums}
 a{color:var(--acc);text-decoration:none}a:hover{color:var(--acc-d)}
-h1{font-size:27px;line-height:1.15;letter-spacing:-.02em;margin:0 0 6px;color:var(--ink);font-weight:700}
-h2{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--mut);margin:34px 0 12px}
-p{margin:0 0 12px}
+h1{font-size:21px;line-height:1.16;letter-spacing:-.022em;margin:0 0 5px;color:var(--ink);font-weight:650}
+h2{font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--mut);margin:30px 0 11px}
+p{margin:0 0 11px}
 
 /* app shell — CoreUI-style dark sidebar */
 .shell{display:flex;min-height:100vh}
-.side{width:224px;flex:none;position:sticky;top:0;height:100vh;overflow:auto;
-  background:var(--sb);color:rgba(255,255,255,.6);display:flex;flex-direction:column}
-.sidebar-header{display:flex;align-items:center;padding:0 16px;height:60px;flex:none;
-  border-bottom:1px solid rgba(255,255,255,.08)}
+.side{width:198px;flex:none;position:sticky;top:0;height:100vh;overflow:auto;
+  background:var(--sb);color:rgba(255,255,255,.55);display:flex;flex-direction:column}
+.sidebar-header{display:flex;align-items:center;padding:0 15px;height:52px;flex:none;
+  border-bottom:1px solid rgba(255,255,255,.07)}
 .side .brand{display:flex;align-items:center;gap:9px;color:#fff}
-.side .brand .mk{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
-  font-weight:800;font-size:16px;color:#fff;background:linear-gradient(135deg,#12b884,#0a5d41)}
-.side .brand .nm{font-size:19px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.side .brand .mk{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  font-weight:700;font-size:14px;color:#fff;background:linear-gradient(135deg,#12b884,#0a5d41)}
+.side .brand .nm{font-size:16px;font-weight:700;letter-spacing:-.03em;line-height:1}
 .side .brand .nm span{color:#4fe0a6}
 .side .brand small{display:block;font-size:9px;font-weight:600;color:rgba(255,255,255,.4);
   letter-spacing:.02em;margin-top:2px}
-/* CoreUI sidebar-nav */
-.sidebar-nav{list-style:none;margin:0;padding:8px 0;display:flex;flex-direction:column;
+.sidebar-nav{list-style:none;margin:0;padding:6px 8px;display:flex;flex-direction:column;
   flex:1;min-height:0}
-.nav-title{padding:16px 16px 8px;font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.06em;color:rgba(255,255,255,.38)}
+.nav-title{padding:14px 8px 6px;font-size:10px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.07em;color:rgba(255,255,255,.32)}
 .nav-item{position:relative}
-.nav-link{display:flex;align-items:center;gap:12px;padding:11px 16px;font-size:14px;
-  font-weight:500;color:rgba(255,255,255,.62);text-decoration:none;
-  transition:background .14s,color .14s}
-.nav-link:hover{color:#fff;background:rgba(255,255,255,.05)}
-.nav-link.active{color:#fff;background:rgba(255,255,255,.09);box-shadow:inset 2px 0 0 var(--acc)}
-.nav-icon{width:20px;height:20px;flex:none;stroke:rgba(255,255,255,.5);stroke-width:1.9;
+.nav-link{display:flex;align-items:center;gap:10px;padding:7px 9px;font-size:13px;border-radius:7px;
+  font-weight:500;color:rgba(255,255,255,.6);text-decoration:none;transition:background .14s,color .14s}
+.nav-link:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-link.active{color:#fff;background:rgba(255,255,255,.1)}
+.nav-icon{width:17px;height:17px;flex:none;stroke:rgba(255,255,255,.48);stroke-width:1.8;
   fill:none;stroke-linecap:round;stroke-linejoin:round}
 .nav-link:hover .nav-icon{stroke:#fff}
 .nav-link.active .nav-icon{stroke:#4fe0a6}
 .nav-item.disabled .nav-link{color:rgba(255,255,255,.32);cursor:default}
 .nav-item.disabled .nav-icon{stroke:rgba(255,255,255,.28)}
-.nav-badge{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.05em;
-  padding:2px 7px;border-radius:20px}
+.nav-badge{margin-left:auto;font-size:8.5px;font-weight:700;letter-spacing:.04em;
+  padding:1px 6px;border-radius:20px}
 .nav-badge.new{background:var(--acc);color:#fff}
-.nav-badge.soon{background:rgba(255,255,255,.1);color:rgba(255,255,255,.5)}
+.nav-badge.soon{background:rgba(255,255,255,.09);color:rgba(255,255,255,.45)}
 .mt-auto{margin-top:auto}
-.side .me{display:flex;align-items:center;gap:10px;padding:14px 16px;
-  border-top:1px solid rgba(255,255,255,.08)}
-.av{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;
-  font-weight:700;font-size:12px;color:#fff;background:linear-gradient(135deg,#3a4a54,#1c2632)}
+.side .me{display:flex;align-items:center;gap:9px;padding:11px 13px;
+  border-top:1px solid rgba(255,255,255,.07)}
+.av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-weight:700;font-size:11px;color:#fff;background:linear-gradient(135deg,#3a4a54,#1c2632)}
 .me .who{min-width:0;flex:1}
-.me .nm{color:#fff;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.me .rl{color:rgba(255,255,255,.45);font-size:11px}
-.logout{flex:none;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
+.me .nm{color:#fff;font-size:12.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me .rl{color:rgba(255,255,255,.42);font-size:10.5px}
+.logout{flex:none;width:29px;height:29px;border-radius:8px;display:grid;place-items:center;
   color:#fff;background:#d9463b}
 .logout:hover{background:#c23a30}
 .logout svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.2;fill:none;
   stroke-linecap:round;stroke-linejoin:round}
 
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
-.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;
-  padding:12px 26px;background:rgba(244,247,245,.86);backdrop-filter:saturate(180%) blur(10px);
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;height:52px;
+  padding:0 22px;background:rgba(251,251,250,.8);backdrop-filter:saturate(180%) blur(14px);
   border-bottom:1px solid var(--line)}
-.top form{flex:1;max-width:660px;position:relative}
-.top form svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);
-  width:17px;height:17px;stroke:#9fb0a8;stroke-width:2;fill:none}
-.top input{width:100%;padding:11px 14px 11px 42px;border-radius:11px;font-size:14px;
+.top form{flex:1;max-width:520px;position:relative}
+.top form svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);
+  width:15px;height:15px;stroke:var(--mut);stroke-width:2;fill:none}
+.top input{width:100%;padding:8px 13px 8px 36px;border-radius:9px;font-size:13px;
   border:1px solid var(--line);background:#fff}
-.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
-  color:var(--acc-d);background:var(--acc-t);border:1px solid #cfe8dc;
-  padding:8px 13px;border-radius:20px;white-space:nowrap}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  color:var(--acc-d);background:var(--acc-t);border:1px solid #d7e8df;
+  padding:5px 11px;border-radius:20px;white-space:nowrap}
 .pulse{width:8px;height:8px;border-radius:50%;background:var(--acc);
   box-shadow:0 0 0 0 rgba(13,122,86,.5);animation:pulse 2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,122,86,.5)}
   70%{box-shadow:0 0 0 7px rgba(13,122,86,0)}100%{box-shadow:0 0 0 0 rgba(13,122,86,0)}}
 /* notifications dropdown (native details) */
 .notif{position:relative}
-.notif summary{list-style:none;cursor:pointer;width:40px;height:40px;border-radius:11px;
+.notif summary{list-style:none;cursor:pointer;width:34px;height:34px;border-radius:9px;
   display:grid;place-items:center;background:#fff;border:1px solid var(--line);color:var(--mut);
   position:relative}
 .notif summary::-webkit-details-marker{display:none}
@@ -372,34 +371,35 @@ p{margin:0 0 12px}
 .mover .nm{font-size:14px;font-weight:700;color:var(--ink)}
 .mover .pc{margin-left:auto;font-weight:700;font-size:14px;display:flex;align-items:center;gap:5px}
 .mover .pr{color:var(--mut);font-size:12px}
-.wrap{padding:26px 28px 60px;max-width:1200px;width:100%}
-.lead{color:var(--mut);font-size:15px;max-width:60ch;margin:-2px 0 22px}
-.back{display:inline-block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:14px}
+.wrap{padding:24px 26px 56px;max-width:1120px;width:100%}
+.lead{color:var(--mut);font-size:13.5px;max-width:62ch;margin:-1px 0 20px}
+.back{display:inline-block;font-size:12.5px;font-weight:600;color:var(--mut);margin-bottom:12px}
 .back:hover{color:var(--acc)}
-.titlerow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.wbtn{flex:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;
-  border:1px solid var(--line);background:#fff;color:var(--body);white-space:nowrap;margin-top:4px}
+.titlerow{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.titlerow h1{font-size:21px}
+.wbtn{flex:none;font-size:12px;font-weight:650;padding:7px 12px;border-radius:8px;
+  border:1px solid var(--line);background:#fff;color:var(--body);white-space:nowrap}
 .wbtn:hover{border-color:#f0d9a0;color:var(--gold)}
 .wbtn.on{background:#fffdf5;border-color:#f0d9a0;color:var(--gold)}
 
 /* dashboard */
-.hi h1{font-size:26px;margin:0 0 4px}
-.hi .sub{color:var(--mut);margin-bottom:22px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
-.stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;
+.hi h1{font-size:22px;margin:0 0 3px}
+.hi .sub{color:var(--mut);margin-bottom:20px;font-size:13.5px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px 16px;
   box-shadow:var(--shadow)}
-.stat .l{color:var(--mut);font-size:13px;font-weight:600}
-.stat .v{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin:8px 0 6px}
-.stat .d{font-size:12px;color:var(--mut)}.stat .d b{color:var(--acc);font-weight:700}
-.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px 22px 6px;
-  box-shadow:var(--shadow);margin-bottom:18px}
-.panel.pad{padding:22px}
+.stat .l{color:var(--mut);font-size:12px;font-weight:600}
+.stat .v{font-size:23px;font-weight:700;color:var(--ink);letter-spacing:-.025em;margin:6px 0 5px}
+.stat .d{font-size:11.5px;color:var(--mut)}.stat .d b{color:var(--acc);font-weight:650}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 18px 6px;
+  box-shadow:var(--shadow);margin-bottom:14px}
+.panel.pad{padding:18px}
 .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.ph h3{font-size:17px;font-weight:700;color:var(--ink);margin:0}
-.ph a{font-size:13px;font-weight:600}
-.pills{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 18px}
-.pill{padding:8px 15px;border-radius:20px;border:1px solid var(--line);background:#fff;
-  font-size:13px;font-weight:600;color:var(--body);cursor:pointer}
+.ph h3{font-size:15px;font-weight:650;color:var(--ink);margin:0;letter-spacing:-.01em}
+.ph a{font-size:12.5px;font-weight:600}
+.pills{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0 16px}
+.pill{padding:6px 13px;border-radius:8px;border:1px solid var(--line);background:#fff;
+  font-size:12.5px;font-weight:600;color:var(--body);cursor:pointer}
 .pill:hover{border-color:#cfe0d7;color:var(--acc-d)}
 .pill.on{background:var(--acc);color:#fff;border-color:transparent}
 .icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
@@ -440,42 +440,42 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
   padding:2px 7px;border-radius:6px;color:var(--ink)}
 /* marketplace-style supplier cards (ingredient detail) */
-.vlist{display:flex;flex-direction:column;gap:14px}
-.vcard{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--line);
-  border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);
-  border-left:4px solid var(--cc,var(--acc));transition:box-shadow .16s,transform .16s}
-.vcard:hover{box-shadow:0 14px 30px -16px rgba(15,31,26,.28);transform:translateY(-1px)}
-.vmono{flex:none;width:56px;height:56px;border-radius:14px;display:grid;place-items:center;
-  font-size:19px;font-weight:800;color:#fff;letter-spacing:.02em;
+.vlist{display:flex;flex-direction:column;gap:10px}
+.vcard{display:flex;gap:13px;align-items:center;background:#fff;border:1px solid var(--line);
+  border-radius:12px;padding:12px 15px;box-shadow:var(--shadow);
+  border-left:3px solid var(--cc,var(--acc));transition:box-shadow .16s,transform .16s}
+.vcard:hover{box-shadow:0 10px 22px -14px rgba(15,31,26,.25);transform:translateY(-1px)}
+.vmono{flex:none;width:42px;height:42px;border-radius:10px;display:grid;place-items:center;
+  font-size:14px;font-weight:800;color:#fff;letter-spacing:.02em;
   background:linear-gradient(135deg,var(--cc),color-mix(in srgb,var(--cc) 60%,#0b0b0b))}
 .vbody{flex:1;min-width:0}
-.vtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.vname{font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.vtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vname{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--ink)}
 .vname:hover{color:var(--acc-d)}
-.vbadge-best{font-size:11px;font-weight:800;color:#1b47c4;background:#e7edff;
-  padding:3px 9px;border-radius:7px;letter-spacing:.01em}
-.vbadge-verified{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;
-  color:#1f8a54;background:#e7f5ee;padding:3px 9px;border-radius:20px}
-.vmeta{display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;color:var(--mut)}
+.vbadge-best{font-size:10px;font-weight:800;color:#1b47c4;background:#e7edff;
+  padding:2px 8px;border-radius:6px;letter-spacing:.01em}
+.vbadge-verified{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;
+  color:#1f8a54;background:#e7f5ee;padding:2px 8px;border-radius:20px}
+.vmeta{display:flex;align-items:center;gap:7px;margin:3px 0 7px;font-size:12px;color:var(--mut)}
 .vr{font-weight:700;color:var(--ink)}.vr .st{color:var(--gold)}.vrn{color:var(--mut);font-weight:600}
-.vr-new{color:var(--mut);font-weight:600;background:var(--bg);padding:2px 8px;border-radius:20px;font-size:12px}
+.vr-new{color:var(--mut);font-weight:600;background:var(--bg);padding:1px 7px;border-radius:20px;font-size:11px}
 .vdot{color:var(--line)}
-.vchips{display:flex;flex-wrap:wrap;gap:8px}
-.vchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--body);
-  background:var(--bg);border:1px solid var(--line);padding:5px 11px;border-radius:8px}
+.vchips{display:flex;flex-wrap:wrap;gap:6px}
+.vchip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--body);
+  background:var(--bg);border:1px solid var(--line);padding:3px 9px;border-radius:7px}
 .vchip.vkind{color:#fff;background:var(--acc);border:0}
 .vchip.vkind.Trader{background:#6a58c4}.vchip.vkind.Importer{background:#c47f1c}
-.vright{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:140px}
-.vprice{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1}
-.vprice .vunit{font-size:13px;font-weight:600;color:var(--mut)}
-.vpricesub{font-size:11px;color:var(--mut);margin-bottom:10px}
-.vbook{display:inline-block;background:var(--acc);color:#fff;font-weight:700;font-size:14px;
-  padding:10px 22px;border-radius:10px;box-shadow:0 6px 16px -8px rgba(13,122,86,.6)}
+.vright{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:120px}
+.vprice{font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1}
+.vprice .vunit{font-size:12px;font-weight:600;color:var(--mut)}
+.vpricesub{font-size:10px;color:var(--mut);margin-bottom:7px}
+.vbook{display:inline-block;background:var(--acc);color:#fff;font-weight:700;font-size:13px;
+  padding:7px 16px;border-radius:9px;box-shadow:0 5px 14px -8px rgba(13,122,86,.6)}
 .vbook:hover{background:var(--acc-d);color:#fff}
 @media(max-width:620px){
-  .vcard{flex-wrap:wrap}.vmono{width:46px;height:46px;font-size:16px}
+  .vcard{flex-wrap:wrap}.vmono{width:38px;height:38px;font-size:13px}
   .vright{min-width:0;width:100%;flex-direction:row;justify-content:space-between;align-items:center;
-    margin-top:8px;padding-top:12px;border-top:1px solid var(--line)}
+    margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
   .vpricesub{display:none}
 }
 .duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
@@ -486,6 +486,13 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 .chartbox{margin-top:14px}
 .chartbox svg{width:100%;height:auto;display:block}
 .axl{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif}
+.tchart{position:relative}
+.tchart svg{width:100%;height:auto;display:block}
+.thit{cursor:crosshair}.tcursor{pointer-events:none}
+.ttip{position:absolute;transform:translate(-50%,-140%);background:var(--ink);color:#fff;
+  font-size:12px;font-weight:600;padding:5px 9px;border-radius:7px;white-space:nowrap;
+  pointer-events:none;opacity:0;transition:opacity .1s;z-index:5;
+  box-shadow:0 6px 16px -8px rgba(0,0,0,.4)}
 .sup{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
 .sup:last-child{border-bottom:0}
 .sup .av{background:linear-gradient(135deg,#0d7a56,#12b884)}
@@ -499,50 +506,50 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 
 /* cards */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 a.tile,.tile{display:block;background:var(--card);border:1px solid var(--line);
-  border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);color:inherit;
+  border-radius:var(--radius);padding:15px;box-shadow:var(--shadow);color:inherit;
   transition:box-shadow .16s ease,border-color .16s ease,transform .16s ease}
-a.tile:hover{border-color:#cfe0d7;box-shadow:0 2px 4px rgba(15,31,26,.05),0 14px 30px -12px rgba(15,31,26,.18);
-  transform:translateY(-2px)}
-.tile .ttl{font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:1.3}
+a.tile:hover{border-color:#dfe4e1;box-shadow:0 1px 2px rgba(17,21,18,.04),0 10px 24px -14px rgba(17,21,18,.16);
+  transform:translateY(-1px)}
+.tile .ttl{font-size:14.5px;font-weight:650;color:var(--ink);letter-spacing:-.01em;line-height:1.3}
 .tile:hover .ttl{color:var(--acc-d)}
-.price{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
-.price .unit{font-size:13px;font-weight:500;color:var(--mut)}
+.price{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.015em}
+.price .unit{font-size:12px;font-weight:500;color:var(--mut)}
 
 /* tables */
 .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);
   box-shadow:var(--shadow);background:var(--card)}
-table{width:100%;border-collapse:collapse;font-size:14px}
-thead th{background:var(--line2);font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.07em;color:var(--mut);text-align:left;padding:11px 16px;
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--line2);font-size:10.5px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--mut);text-align:left;padding:9px 14px;
   border-bottom:1px solid var(--line);white-space:nowrap}
-tbody td{padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
 tbody tr:last-child td{border-bottom:0}
 tbody tr:hover{background:var(--line2)}
 
 /* tags + badges */
-.tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;
+.tag{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;
   background:var(--bg);border:1px solid var(--line);color:var(--mut);margin:2px 3px 2px 0}
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
-.kind{font-weight:700;color:#fff;background:var(--acc);border:0;letter-spacing:.01em}
+.kind{font-weight:650;color:#fff;background:var(--acc);border:0;letter-spacing:.01em}
 .kind.Trader{background:#6a58c4}.kind.Importer{background:#c47f1c}
 .func{background:var(--acc-t);border-color:transparent;color:var(--acc-d)}
-.mut{color:var(--mut);font-size:13px}
-.metaline{color:var(--mut);font-size:13px;margin:3px 0}
+.mut{color:var(--mut);font-size:12.5px}
+.metaline{color:var(--mut);font-size:12.5px;margin:3px 0}
 
 /* forms */
-form.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-input,select,textarea{font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);
-  border-radius:9px;background:#fff;color:var(--ink);transition:border-color .12s,box-shadow .12s}
-input::placeholder{color:#9fb0a8}
+form.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select,textarea{font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);
+  border-radius:8px;background:#fff;color:var(--ink);transition:border-color .12s,box-shadow .12s}
+input::placeholder{color:#a8b3ad}
 input:focus,select:focus,textarea:focus{outline:0;border-color:var(--acc);
   box-shadow:0 0 0 3px var(--acc-t)}
-input[type=search]{flex:1;min-width:240px}
-select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7d75' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;appearance:none}
-button{font:inherit;font-size:14px;font-weight:600;padding:10px 20px;border:0;border-radius:9px;
+input[type=search]{flex:1;min-width:220px}
+select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a968f' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;appearance:none}
+button{font:inherit;font-size:13px;font-weight:650;padding:8px 16px;border:0;border-radius:8px;
   background:var(--acc);color:#fff;cursor:pointer;transition:background .12s,transform .06s}
 button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
 
@@ -681,6 +688,23 @@ document.cookie='seen='+encodeURIComponent(sig)+';path=/;max-age=31536000;samesi
 var d=n.querySelector('.dot');if(d)d.remove();}});})();
 </script>"""
 
+# Interactive price chart: hover any month to read its price.
+TREND_JS = """<script>
+document.querySelectorAll('.tchart').forEach(function(ch){
+var svg=ch.querySelector('svg'),tip=ch.querySelector('.ttip'),
+guide=ch.querySelector('.tguide'),cur=ch.querySelector('.tcursor'),vb=svg.viewBox.baseVal;
+function show(r){var x=+r.dataset.x,y=+r.dataset.y;
+guide.setAttribute('x1',x);guide.setAttribute('x2',x);guide.setAttribute('opacity','.45');
+cur.setAttribute('cx',x);cur.setAttribute('cy',y);cur.setAttribute('opacity','1');
+var b=svg.getBoundingClientRect(),sx=b.width/vb.width,sy=b.height/vb.height;
+tip.textContent=r.dataset.m+' · '+r.dataset.v;
+tip.style.left=(x*sx)+'px';tip.style.top=(y*sy)+'px';tip.style.opacity='1';}
+ch.querySelectorAll('.thit').forEach(function(r){
+r.addEventListener('pointerenter',function(){show(r);});});
+ch.addEventListener('pointerleave',function(){tip.style.opacity='0';
+guide.setAttribute('opacity','0');cur.setAttribute('opacity','0');});});
+</script>"""
+
 def page(title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -689,7 +713,7 @@ def page(title, body, active="dashboard", q=""):
             f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
-            f"</div></div>{NOTIF_JS}</html>").encode()
+            f"</div></div>{NOTIF_JS}{TREND_JS}</html>").encode()
 
 
 def stars(avg):
@@ -824,8 +848,8 @@ def notifications(con):
     return items
 
 
-def price_chart(points, w=560, h=210):
-    """Line chart with y gridlines + month labels for the market-trend panel."""
+def price_chart(points, w=620, h=220):
+    """Interactive line chart — hover shows the price for any past month."""
     vals = [p for _, p in points]
     if len(vals) < 2:
         return "<p class=empty>No price history.</p>"
@@ -833,7 +857,7 @@ def price_chart(points, w=560, h=210):
     pad = (hi - lo) * 0.18 or hi * 0.1 or 1
     lo, hi = lo - pad, hi + pad
     rng = hi - lo or 1
-    pl, pr, pt, pb = 52, 12, 14, 26
+    pl, pr, pt, pb = 52, 14, 16, 28
     iw, ih, n = w - pl - pr, h - pt - pb, len(vals)
     xs = [pl + iw * i / (n - 1) for i in range(n)]
     ys = [pt + ih * (1 - (v - lo) / rng) for v in vals]
@@ -842,23 +866,34 @@ def price_chart(points, w=560, h=210):
         gy = pt + ih * g / 3
         grid += (f"<line x1={pl} y1={gy:.1f} x2={w - pr} y2={gy:.1f} stroke='var(--line)'/>"
                  f"<text x={pl - 8} y={gy + 4:.1f} text-anchor=end class=axl>"
-                 f"{hi - rng * g / 3:,.0f}</text>")
+                 f"₹{hi - rng * g / 3:,.0f}</text>")
     line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
     area = f"{pl},{pt + ih} {line} {w - pr},{pt + ih}"
-    dots = "".join(f"<circle cx={x:.1f} cy={y:.1f} r=3 fill='var(--acc)'/>"
-                   for x, y in zip(xs, ys))
+    # data-bearing hover targets: one column per month carrying the label + price
+    hits, dots = "", ""
+    for (m, v), x, y in zip(points, xs, ys):
+        yr, mm = m.split("-")
+        label = f"{MON_ABBR[int(mm)]} {yr}"
+        dots += f"<circle class=tdot cx={x:.1f} cy={y:.1f} r=3 fill='var(--acc)'/>"
+        hits += (f"<rect class=thit x={x - iw / (n - 1) / 2:.1f} y={pt} "
+                 f"width={iw / (n - 1):.1f} height={ih} fill=transparent "
+                 f"data-x='{x:.1f}' data-y='{y:.1f}' data-m='{E(label)}' data-v='₹{v:,.0f}'/>")
     step = max(1, n // 6)
     xl = "".join(
         f"<text x={xs[i]:.1f} y={h - 8} text-anchor=middle class=axl>"
         f"{MON_ABBR[int(m.split('-')[1])]}</text>"
         for i, (m, _) in enumerate(points) if i % step == 0 or i == n - 1)
-    return (f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
+    return (f"<div class=tchart>"
+            f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
             f"<defs><linearGradient id=g x1=0 y1=0 x2=0 y2=1>"
             f"<stop offset=0 stop-color='var(--acc)' stop-opacity=.18/>"
             f"<stop offset=1 stop-color='var(--acc)' stop-opacity=0/></linearGradient></defs>"
             f"{grid}<polygon points='{area}' fill='url(#g)'/>"
             f"<polyline points='{line}' fill=none stroke='var(--acc)' stroke-width=2 "
-            f"stroke-linejoin=round stroke-linecap=round/>{dots}{xl}</svg>")
+            f"stroke-linejoin=round stroke-linecap=round/>"
+            f"<line class=tguide x1=0 y1={pt} x2=0 y2={pt + ih} stroke='var(--acc)' "
+            f"stroke-dasharray='3 3' opacity=0/><circle class=tcursor r=5 fill='var(--acc)' opacity=0/>"
+            f"{dots}{xl}{hits}</svg><div class=ttip></div></div>")
 
 
 # ---------- queries ----------
@@ -1145,9 +1180,15 @@ def view_ingredient(con, ing_id, wl=frozenset()):
         {"".join(f"<span class='tag func'>{E(f.strip())}</span>" for f in ing['functions'].split(','))}</div>
       <div class=card style='color:var(--body)'>{E(ing['description'])}</div>
       <h2>Market trend</h2>
-      <div class=card>{sparkline([(m['month'], m['price']) for m in trend], 560, 90)}
-        <div class=metaline style='margin-top:10px'>Monthly average landed price, ₹/{E(ing['unit'])}
-        {('· ' + str(trend[0]['month']) + ' → ' + str(trend[-1]['month'])) if trend else ''}</div></div>
+      <div class=card>
+        {price_chart([(m['month'], m['price']) for m in trend])}
+        <div class=metaline style='margin-top:10px'>Hover any point for that month's price ·
+        indicative ₹/{E(ing['unit'])}
+        {(f"· {trend[0]['month']} → {trend[-1]['month']} · "
+          f"<span class={'up' if trend[-1]['price'] >= trend[0]['price'] else 'down'}>"
+          f"{'+' if trend[-1]['price'] >= trend[0]['price'] else ''}"
+          f"{(trend[-1]['price'] - trend[0]['price']) / trend[0]['price'] * 100:.1f}%</span>")
+         if trend and trend[0]['price'] else ''}</div></div>
       <div class=ph style='margin:34px 0 14px'>
         <h2 style='margin:0'>{len(offers)} supplier{'' if len(offers) == 1 else 's'}</h2>
         {f"<span class=count>Prices updated {E(last_upd)}</span>" if last_upd else ""}</div>
@@ -1250,6 +1291,12 @@ def view_vendor(con, vid, msg=""):
                 if ("state" in v.keys() and v["state"]) else ""),
     ]) or "<div class=metaline>No contact details on file.</div>"
 
+    _id = current()
+    _pf = (con.execute("SELECT name,company FROM profile WHERE code=?", (_id["code"],)).fetchone()
+           if _id else None)
+    rater_as = (_pf["name"] if _pf and _pf["name"] else (_id["note"] if _id else "You")) + \
+               (f" · {_pf['company']}" if _pf and _pf["company"] else "")
+
     return page(v["name"], f"""
       <a class=back href='/vendors'>← Vendors</a>
       <h1>{E(v['name'])}</h1>
@@ -1270,12 +1317,13 @@ def view_vendor(con, vid, msg=""):
       <h2>Rate this vendor</h2>
       <div class=card>
         {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
+        <div class=metaline style='margin-top:0;margin-bottom:12px'>
+          Posting as <b style='color:var(--ink)'>{E(rater_as)}</b> — verified from your account.</div>
         <form class=filters method=post action='/rate'>
           <input type=hidden name=vendor_id value='{vid}'>
-          <input name=rater placeholder='Your company' required maxlength=120>
-          <select name=rater_type><option>Client</option><option>Manufacturer</option></select>
-          <select name=score>{"".join(f"<option value={s}>{s} ★</option>" for s in (5, 4, 3, 2, 1))}</select>
-          <input name=note placeholder='Quality, docs, lead time…' maxlength=500 style='flex:1'>
+          <select name=score aria-label='Star rating'>
+            {"".join(f"<option value={s}>{'★' * s}{'☆' * (5 - s)}  ({s})</option>" for s in (5, 4, 3, 2, 1))}</select>
+          <input name=note placeholder='Remarks — quality, docs, lead time…' maxlength=500 style='flex:1'>
           <button>Submit rating</button>
         </form></div>
       <h2>Reviews</h2>{revs}""", active="suppliers")
@@ -1288,18 +1336,22 @@ def post_rate(con, body):
         score = int(f.get("score", ["0"])[0])
     except ValueError:
         return None, "Bad rating input."
-    rater = f.get("rater", [""])[0].strip()[:120]
-    rtype = f.get("rater_type", ["Client"])[0]
     note = f.get("note", [""])[0].strip()[:500]
-    if not (1 <= score <= 5) or not rater or rtype not in ("Client", "Manufacturer"):
-        return vid or None, "Need a company name and a score of 1-5."
+    if not (1 <= score <= 5):
+        return vid or None, "Pick a star rating (1-5)."
     if not con.execute("SELECT 1 FROM vendor WHERE id=?", (vid,)).fetchone():
         return None, "Unknown vendor."
+    # rater identity is taken from the signed-in account — never user input
+    ident = current()
+    prof = (con.execute("SELECT name,company FROM profile WHERE code=?", (ident["code"],)).fetchone()
+            if ident else None)
+    rater = (prof["name"] if prof and prof["name"] else (ident["note"] if ident else "Anonymous"))[:120]
+    rtype = (prof["company"] if prof and prof["company"] else "Ingrex user")[:120]
     con.execute("INSERT INTO rating (vendor_id,rater,rater_type,score,note,created)"
                 " VALUES (?,?,?,?,?,?)",
                 (vid, rater, rtype, score, note, date.today().isoformat()))
     con.commit()
-    return vid, "Thanks - rating recorded."
+    return vid, "Thanks — rating recorded."
 
 
 # ---------- presence ----------
@@ -1348,6 +1400,34 @@ def watched_ids(headers):
 def safe_back(path):
     """Only allow same-site relative redirects (no open redirect)."""
     return path if path.startswith("/") and not path.startswith("//") else "/"
+
+
+# Profile mirrored into a signed per-device cookie so onboarding survives the
+# free-tier's DB resets — the user never fills the form twice on the same device.
+PROF_COOKIE = "prof"
+
+
+def _psig(payload):
+    return hmac.new(b"prof-" + AUTH_SECRET, payload.encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def prof_cookie(d):
+    payload = urllib.parse.urlencode({k: d.get(k, "") for k in
+                                      ("name", "company", "role", "gst", "city")})
+    val = urllib.parse.quote(payload) + "." + _psig(payload)
+    return f"{PROF_COOKIE}={val}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax; Secure"
+
+
+def read_prof(headers):
+    enc, _, sig = _cookie(headers, PROF_COOKIE).rpartition(".")
+    if not enc:
+        return None
+    payload = urllib.parse.unquote(enc)
+    if hmac.compare_digest(sig, _psig(payload)):
+        d = dict(urllib.parse.parse_qsl(payload))
+        if d.get("name") and d.get("company"):
+            return d
+    return None
 
 
 # ---------- invite-only auth ----------
@@ -1648,11 +1728,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             touch_online(f"{ident['code'] if ident else 'anon'}|{self._client_ip()}",
                          ident["note"] if ident else "Guest", ident["code"] if ident else "",
                          self._client_ip(), is_admin())
-            # onboarding: invited (non-admin) users must complete their profile first
+            # onboarding: invited (non-admin) users must complete their profile first.
+            # If a signed profile cookie survives a DB reset, restore it silently.
             if ident and not is_admin() and not profile_done(con, ident["code"]):
-                if url.path != "/welcome":
+                saved = read_prof(self.headers)
+                if saved:
+                    con.execute(
+                        "INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,"
+                        "completed,created) VALUES(?,?,?,?,?,?,1,?)",
+                        (ident["code"], saved["name"], saved.get("company", ""),
+                         saved.get("role", ""), saved.get("gst", ""), saved.get("city", ""),
+                         date.today().isoformat()))
+                    con.execute("UPDATE invite SET note=? WHERE code=?",
+                                (saved["name"], ident["code"]))
+                    con.commit()
+                elif url.path != "/welcome":
                     return self._redirect("/welcome")
-                return self._send(view_welcome(con, ident["code"]))
+                else:
+                    return self._send(view_welcome(con, ident["code"]))
             if url.path == "/welcome":
                 return self._redirect("/")   # already done, or admin/dev
             wl = watched_ids(self.headers)
@@ -1723,7 +1816,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                              d["city"], date.today().isoformat()))
                 con.execute("UPDATE invite SET note=? WHERE code=?", (d["name"], ident["code"]))
                 con.commit()
-                return self._redirect("/")
+                return self._redirect("/", prof_cookie(d))   # survives DB resets
             admin = is_admin() or not gated
             if path == "/rate":
                 vid, msg = post_rate(con, body)
@@ -1781,13 +1874,14 @@ def demo():
     cheap = search_ingredients(con, maxp=100)
     assert cheap and all(r["lo"] <= 100 for r in cheap)
 
-    # ratings: none seeded from CSV; post_rate validates + aggregates
+    # ratings: none seeded; identity taken from account, not user input
     assert vendor_rating(con, 1) == (None, 0)
-    assert post_rate(con, "vendor_id=1&score=9&rater=X")[1].startswith("Need")
-    assert post_rate(con, "vendor_id=1&score=5&rater=")[1].startswith("Need")
-    assert post_rate(con, "vendor_id=999&score=5&rater=X")[0] is None
-    vid, msg = post_rate(con, "vendor_id=1&score=4&rater=Test+Co&rater_type=Client&note=hi")
+    assert post_rate(con, "vendor_id=1&score=9")[1].startswith("Pick"), "score out of range"
+    assert post_rate(con, "vendor_id=999&score=5")[0] is None, "unknown vendor"
+    vid, msg = post_rate(con, "vendor_id=1&score=4&note=good+lots")
     assert vid == 1 and vendor_rating(con, 1) == (4.0, 1)
+    # rater was NOT taken from the request body (no impersonation)
+    assert con.execute("SELECT rater FROM rating WHERE vendor_id=1").fetchone()["rater"] == "Anonymous"
 
     # rendering: escapes user input, no crash on real pages
     con.execute("INSERT INTO rating (vendor_id,rater,score) VALUES (1,?,3)",
@@ -1867,6 +1961,11 @@ def demo():
                 "VALUES('CODE1','Riya','Acme','Trader','123456789012345','Pune',1,'d')")
     con.commit()
     assert profile_done(con, "CODE1")
+    # profile persists in a signed cookie (survives DB resets, no impersonation)
+    pc = prof_cookie({"name": "Riya", "company": "Acme", "role": "Trader",
+                      "gst": "123456789012345", "city": "Pune"}).split(";")[0]
+    assert read_prof({"Cookie": pc})["company"] == "Acme"
+    assert read_prof({"Cookie": "prof=tampered.0000"}) is None
 
     # kick: remove-active-user logic revokes code + drops presence
     ONLINE.clear()
