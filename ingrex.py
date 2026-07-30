@@ -286,8 +286,14 @@ p{margin:0 0 12px}
   border-top:1px solid rgba(255,255,255,.08)}
 .av{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;
   font-weight:700;font-size:12px;color:#fff;background:linear-gradient(135deg,#3a4a54,#1c2632)}
-.me .nm{color:#fff;font-size:13px;font-weight:700}
+.me .who{min-width:0;flex:1}
+.me .nm{color:#fff;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me .rl{color:rgba(255,255,255,.45);font-size:11px}
+.logout{flex:none;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
+  color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
+.logout:hover{color:#fff;background:rgba(255,255,255,.12)}
+.logout svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;
+  stroke-linecap:round;stroke-linejoin:round}
 
 .content{flex:1;min-width:0;display:flex;flex-direction:column}
 .top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;
@@ -383,15 +389,14 @@ a.icard{display:block;border:1px solid var(--line);border-radius:16px;padding:12
   color:inherit;background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
 a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
   box-shadow:0 14px 30px -14px rgba(15,31,26,.28)}
-.iimg{position:relative;height:118px;border-radius:12px;overflow:hidden;margin-bottom:12px;
-  display:grid;place-items:end center}
-.iimg svg{width:100%;height:100%;display:block}
-.iglyph{position:absolute;top:9px;left:11px;font-size:17px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
-.icard .irate{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ink)}
+.icard{padding:16px}
+.icard .irate{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink)}
 .icard .irate .st{color:var(--gold);letter-spacing:.5px}
 .icard .irate .new{color:var(--mut);font-weight:600}
-.icard .inm{font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3;margin:7px 0 2px;
-  min-height:2.6em}
+.icard .icat{font-size:12px;font-weight:600;color:var(--mut);margin-top:8px}
+.icard .inm{font-size:16px;font-weight:700;color:var(--ink);line-height:1.32;margin:4px 0 2px;
+  min-height:2.4em}
+.iwrap .star{top:14px;right:14px}
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
 .icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
 .icard .isup{color:var(--mut);font-size:12.5px;font-weight:600;margin-top:3px}
@@ -552,8 +557,11 @@ def sidebar(active):
             f"<small>Nutraceutical sourcing</small></span></a></div>"
             f"{nav}"
             f"<div class=me><span class=av>{E(initials(name))}</span>"
-            f"<span><span class=nm>{E(name)}</span><br>"
-            f"<span class=rl>{role}</span></span></div></aside>")
+            f"<span class=who><span class=nm>{E(name)}</span><br>"
+            f"<span class=rl>{role}</span></span>"
+            f"<a class=logout href='/logout' title='Log out' aria-label='Log out'>"
+            f"<svg viewBox='0 0 24 24'><path d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3'/></svg>"
+            f"</a></div></aside>")
 
 
 def topbar(q=""):
@@ -645,43 +653,9 @@ def doc_tags(docs):
 MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# Per-category illustration: (dark, light) gradient + an emoji glyph. Replaces the
-# old letter monograms with a stylised "powder tile" — no external image deps.
-CAT_ART = {
-    "Herbal Extract": ("#2f6d1a", "#a8e05a", "🌿"),
-    "Vitamin":        ("#b06a10", "#f4c95b", "💊"),
-    "Protein":        ("#215a94", "#8cc0ec", "🥛"),
-    "Mineral":        ("#4a5563", "#aeb9c6", "🧂"),
-    "Amino Acid":     ("#4a3a9c", "#b3a4e6", "🧬"),
-    "Probiotic":      ("#0a6d6d", "#5fd0d0", "🦠"),
-    "Lipid":          ("#a13457", "#e6a6bb", "🐟"),
-    "Active":         ("#0a5d41", "#5fe0a6", "⚗️"),
-    "Protein Isolate": ("#215a94", "#8cc0ec", "🥛"),
-}
-_DEFAULT_ART = ("#4b6a5e", "#9fc0b2", "✦")
-
-
 def greeting():
     h = datetime.now().hour
     return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
-
-
-def ing_image(r):
-    """Stylised powder-mound illustration coloured by category (no photo assets)."""
-    c1, c2, glyph = CAT_ART.get(r["category"], _DEFAULT_ART)
-    return (f"<div class=iimg>"
-            f"<svg viewBox='0 0 120 118' preserveAspectRatio='xMidYMax slice' aria-hidden=true>"
-            f"<defs><linearGradient id='bg{r['id']}' x1=0 y1=0 x2=0 y2=1>"
-            f"<stop offset=0 stop-color='{c2}'/><stop offset=1 stop-color='{c1}'/></linearGradient></defs>"
-            f"<rect width=120 height=118 fill='url(#bg{r['id']})'/>"
-            f"<ellipse cx=60 cy=112 rx=48 ry=9 fill='rgba(0,0,0,.12)'/>"
-            f"<path d='M14 108 C40 66 52 56 60 56 C68 56 80 66 106 108 Z' fill='rgba(255,255,255,.9)'/>"
-            f"<path d='M14 108 C40 66 52 56 60 56 C63 60 56 78 40 108 Z' fill='rgba(255,255,255,.55)'/>"
-            f"<circle cx=42 cy=101 r=2.4 fill='rgba(255,255,255,.8)'/>"
-            f"<circle cx=80 cy=103 r=2.8 fill='rgba(255,255,255,.7)'/>"
-            f"<circle cx=92 cy=99 r=1.8 fill='rgba(255,255,255,.6)'/>"
-            f"<circle cx=30 cy=104 r=1.7 fill='rgba(255,255,255,.6)'/></svg>"
-            f"<span class=iglyph>{glyph}</span></div>")
 
 
 def icard(r, wl=frozenset(), back="/", moves=None):
@@ -705,8 +679,9 @@ def icard(r, wl=frozenset(), back="/", moves=None):
             f"title='{'Remove from' if on else 'Add to'} watchlist' "
             f"aria-label='toggle watchlist'>{'★' if on else '☆'}</a>")
     return (f"<div class=iwrap>{star}"
-            f"<a class=icard href='/ingredient/{r['id']}'>{ing_image(r)}"
+            f"<a class=icard href='/ingredient/{r['id']}'>"
             f"<div class=irate>{rating}</div>"
+            f"<div class=icat>{E(r['category'])}</div>"
             f"<div class=inm>{E(r['name'])}</div>"
             f"<div class=iprice>{price}</div>"
             f"<div class=isup>{r['vendors']} Supplier{'' if r['vendors'] == 1 else 's'}</div>"
@@ -908,8 +883,10 @@ def view_dashboard(con, wl=frozenset()):
                    f"<div class=pr>₹{m['price']:,.0f}/{E(m['unit'])} · this month</div></span>"
                    f"<span class='pc {'up' if up else 'down'}'>{'▲' if up else '▼'} "
                    f"{abs(m['pct']):.1f}%</span></a>")
+    ident = current()
+    who = ident["note"].split()[0] if ident and ident["note"] else "there"
     body = f"""
-      <div class=hi><h1>{greeting()}, Karan 👋</h1>
+      <div class=hi><h1>{greeting()}, {E(who)} 👋</h1>
         <div class=sub>Here's what's happening with your sourcing today.</div></div>
       {stat_cards(con)}
       <div class='panel pad'>
@@ -1435,6 +1412,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             CTX.ident = ident
             if url.path == "/login":
                 return self._send(login_page(prefill=params.get("code", [""])[0][:64]))
+            if url.path == "/logout":
+                return self._redirect("/login", f"{COOKIE}=; Max-Age=0; Path=/; "
+                                      "HttpOnly; SameSite=Lax; Secure")
             if gated and not ident:
                 code = params.get("code", [""])[0][:64]
                 return self._redirect("/login" + (f"?code={urllib.parse.quote(code)}" if code else ""))
@@ -1618,14 +1598,16 @@ def demo():
     # admin view + presence-aware rendering via CTX
     CTX.ident = identity(con, {"Cookie": admin_c})
     assert is_admin() and b"Online now" in view_admin(con) and b"Admin" in view_dashboard(con)
+    assert b"Boss" in view_dashboard(con), "greeting uses the signed-in user's name"
+    assert b"/logout" in view_dashboard(con), "logout button present"
     CTX.ident = None
     con.execute("DELETE FROM invite")
     con.commit()
 
-    # new card: rating, powder image, price-move badge, updated label
+    # card shows rating, price-move badge, supplier count, updated label — no image
     dash = view_dashboard(con)
-    assert b"iimg" in dash and b"ibadge" in dash and b"Supplier" in dash and b"Updated" in dash
-    assert "🌿" in ing_image({"id": 1, "category": "Herbal Extract"})
+    assert b"ibadge" in dash and b"Supplier" in dash and b"Updated" in dash
+    assert b"iimg" not in dash, "illustration removed"
     assert search_ingredients(con)[0]["rating"] is not None
 
     # sparkline: direction and degenerate input
