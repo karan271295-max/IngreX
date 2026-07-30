@@ -575,6 +575,10 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
   border:1px solid color-mix(in srgb,var(--cc) 24%,#fff)}
 .icard .priceband .unit{font-size:12px;font-weight:500;color:var(--mut)}
 .iwrap .star{top:14px;right:14px}
+.itable td{vertical-align:middle}.itable tbody tr:hover{background:var(--acc-t)}
+.itable .starcell{width:34px;text-align:center;padding-right:0}
+.star2{font-size:16px;color:#c2ccc6;text-decoration:none}
+.star2:hover{color:var(--gold)}.star2.on{color:var(--gold)}
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
 .icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
 .icard .isup{color:var(--mut);font-size:12.5px;font-weight:600;margin-top:3px}
@@ -1349,14 +1353,36 @@ def view_search(con, params, wl=frozenset()):
         <button>Search</button>
       </form></div>
       <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
-      <div class=icards>{"".join(icard(r, wl, back, mv) for r in rows)}</div>
-      {("" if rows else
+      {(f'''<div class=tablewrap><table class=itable>
+        <thead><tr><th></th><th>Ingredient</th><th>Price range</th><th>Suppliers</th>
+          <th>12-mo</th><th>Updated</th></tr></thead>
+        <tbody>{"".join(irow(r, wl, back, mv) for r in rows)}</tbody></table></div>''') if rows else
         f"<div class='panel pad' style='text-align:center'>"
         f"<p style='margin:0 0 10px'>No match for that search.</p>"
         f"<p class=metaline style='margin:0 0 14px'>Looking for an ingredient not on Ingrex? "
         f"Raise a sourcing request and our purchase team will find a supplier for you.</p>"
-        f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>")}"""
+        f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>"}"""
     return page("Search", body, active="search", q=q)
+
+
+def irow(r, wl=frozenset(), back="/search", mv=None):
+    """One ingredient as a table row (search list view)."""
+    on = r["id"] in wl
+    star = (f"<a class='star2{' on' if on else ''}' onclick='event.stopPropagation()' "
+            f"href='/watch?id={r['id']}&back={urllib.parse.quote(back)}' "
+            f"title='{'Remove from' if on else 'Add to'} watchlist'>{'★' if on else '☆'}</a>")
+    price = (f"₹{r['lo']:,.0f}–{r['hi']:,.0f}<span class=metaline> /{E(r['unit'])}</span>"
+             if r["lo"] else "<span class=metaline>—</span>")
+    pct = (mv or {}).get(r["id"])
+    trend = ("<span class=metaline>—</span>" if pct is None else
+             f"<span class={'up' if pct >= 0 else 'down'}>{'▲' if pct >= 0 else '▼'} {abs(pct):.1f}%</span>")
+    upd = f"{E(r['updated'])}" if r["updated"] else "—"
+    return (f"<tr onclick=\"location='/ingredient/{r['id']}'\" style='cursor:pointer'>"
+            f"<td class=starcell>{star}</td>"
+            f"<td><a href='/ingredient/{r['id']}'><b>{E(r['name'])}</b></a>"
+            f"<div class=metaline>{E(r['category'])}</div></td>"
+            f"<td><span class=price style='font-size:14px'>{price}</span></td>"
+            f"<td>{r['vendors']}</td><td>{trend}</td><td class=metaline>{upd}</td></tr>")
 
 
 def view_watchlist(con, wl=frozenset()):
