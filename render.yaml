@@ -2,11 +2,12 @@ services:
   - type: web
     name: ingrex
     runtime: python
-    plan: free
+    plan: free                    # free tier: no persistent disk, sleeps when idle
     buildCommand: "true"          # stdlib only, nothing to install
     startCommand: python3 ingrex.py
     envVars:
       - key: HOST
         value: 0.0.0.0
-    # ponytail: no disk attached, so ratings reset on each deploy/restart.
-    # Add a Render disk mounted at /data + DB=/data/ingrex.db when feedback must persist.
+    # ponytail: free tier has no disk, so DB lives on ephemeral storage.
+    # Ratings reset on every redeploy / sleep-wake. To persist: upgrade to a
+    # paid plan, add a disk mounted at /data, set DB=/data/ingrex.db.
