@@ -10,6 +10,7 @@ import html
 import http.server
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import threading
@@ -17,10 +18,11 @@ import time
 import urllib.parse
 from datetime import date, datetime
 
-# Shared pilot gate. Set INGREX_PW in the host env to require a password to
-# enter the site. Unset/empty (local dev, tests) leaves the site open.
-AUTH_PW = os.environ.get("INGREX_PW", "")
-AUTH_SECRET = (os.environ.get("INGREX_SECRET") or AUTH_PW or "dev-insecure").encode()
+# Invite-only gate. Access needs an invite code (see ensure_invites): set
+# INGREX_ADMIN_CODE (master admin) and optionally INGREX_INVITES on the host.
+# With no invite codes configured, the site is open (local dev, tests).
+# INGREX_SECRET keeps auth cookies valid across restarts — set it in production.
+AUTH_SECRET = (os.environ.get("INGREX_SECRET") or "ingrex-pilot-secret").encode()
 COOKIE = "ing_auth"
 COOKIE_MAXAGE = 60 * 60 * 24 * 30  # 30 days
 
@@ -199,7 +201,29 @@ def init_db(path=None):
             [(i + 1, mo[k], p) for i, series in SEED_TREND.items()
              for k, p in enumerate(series)])
         con.commit()
+    ensure_invites(con)
     return con
+
+
+def ensure_invites(con):
+    """Invite table + env-seeded codes. Runs every start so INGREX_ADMIN_CODE /
+    INGREX_INVITES survive the free-tier's ephemeral DB (which resets per deploy)."""
+    con.execute("""CREATE TABLE IF NOT EXISTS invite(
+        code TEXT PRIMARY KEY, note TEXT, is_admin INTEGER DEFAULT 0,
+        revoked INTEGER DEFAULT 0, created TEXT)""")
+    today = date.today().isoformat()
+    admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
+    if admin:
+        con.execute("INSERT OR IGNORE INTO invite(code,note,is_admin,created) VALUES(?,?,1,?)",
+                    (admin, "Master admin", today))
+        con.execute("UPDATE invite SET is_admin=1, revoked=0 WHERE code=?", (admin,))
+    for pair in os.environ.get("INGREX_INVITES", "").split(","):
+        code, _, note = pair.strip().partition(":")
+        code = code.strip()
+        if code:
+            con.execute("INSERT OR IGNORE INTO invite(code,note,created) VALUES(?,?,?)",
+                        (code, note.strip() or code, today))
+    con.commit()
 
 
 # ---------- rendering ----------
@@ -363,17 +387,35 @@ p{margin:0 0 12px}
   font-size:13px;font-weight:600;color:var(--body);cursor:pointer}
 .pill:hover{border-color:#cfe0d7;color:var(--acc-d)}
 .pill.on{background:var(--acc);color:#fff;border-color:transparent}
-.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px}
-a.icard{display:block;border:1px solid var(--line);border-radius:14px;padding:13px;color:inherit;
-  background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+a.icard{display:block;border:1px solid var(--line);border-radius:16px;padding:12px 12px 14px;
+  color:inherit;background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
 a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
-  box-shadow:0 12px 26px -14px rgba(15,31,26,.25)}
-.icard .mono{height:92px;border-radius:11px;display:grid;place-items:center;margin-bottom:12px;
-  font-size:28px;font-weight:800;color:#fff;letter-spacing:.02em}
-.icard .nm{font-size:14px;font-weight:700;color:var(--ink);line-height:1.3}
-.icard .ct{color:var(--mut);font-size:12px;margin-top:2px}
-.icard .pr{font-size:15px;font-weight:800;color:var(--ink);margin-top:9px}
-.icard .pr .unit{font-size:12px;font-weight:500;color:var(--mut)}
+  box-shadow:0 14px 30px -14px rgba(15,31,26,.28)}
+.iimg{position:relative;height:118px;border-radius:12px;overflow:hidden;margin-bottom:12px;
+  display:grid;place-items:end center}
+.iimg svg{width:100%;height:100%;display:block}
+.iglyph{position:absolute;top:9px;left:11px;font-size:17px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.icard .irate{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ink)}
+.icard .irate .st{color:var(--gold);letter-spacing:.5px}
+.icard .irate .new{color:var(--mut);font-weight:600}
+.icard .inm{font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3;margin:7px 0 2px;
+  min-height:2.6em}
+.icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
+.icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
+.icard .isup{color:var(--mut);font-size:12.5px;font-weight:600;margin-top:3px}
+.icard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;
+  padding-top:10px;border-top:1px solid var(--line2)}
+.icard .ibadge{font-size:11px;font-weight:800;padding:4px 9px;border-radius:20px}
+.icard .ibadge.down{background:var(--acc-t);color:var(--acc-d)}
+.icard .ibadge.up{background:#fbe9df;color:var(--up)}
+.icard .ibadge.flat{background:var(--bg);color:var(--mut)}
+.icard .iupd{font-size:11px;color:var(--mut);font-weight:600}
+.xbtn{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;background:#fff;
+  color:var(--up);border:1px solid #e6c3ad;cursor:pointer}
+.xbtn:hover{background:#fbe9df}
+code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
+  padding:2px 7px;border-radius:6px;color:var(--ink)}
 .duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
 .chartbox{margin-top:14px}
 .chartbox svg{width:100%;height:auto;display:block}
@@ -481,10 +523,20 @@ NAV = [
 ]
 
 
+def initials(name):
+    words = [w for w in re.split(r"[^A-Za-z0-9]+", name or "") if w]
+    return ((words[0][:2] if len(words) == 1 else words[0][0] + words[1][0]).upper()
+            if words else "IX")
+
+
 def sidebar(active):
-    active_idx = next((i for i, n in enumerate(NAV) if n[2] == active), -1)
+    nav_items = list(NAV)
+    if is_admin():
+        nav_items.append(("Admin", "/admin", "admin",
+                          "M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"))
+    active_idx = next((i for i, n in enumerate(nav_items) if n[2] == active), -1)
     lis = ""
-    for i, (label, href, key, _path) in enumerate(NAV):
+    for i, (label, href, key, _path) in enumerate(nav_items):
         cur = " aria-current=true" if key == active else ""
         inner = (f"<span class=line-sidebar__marker aria-hidden=true></span>"
                  f"<span class=line-sidebar__label>"
@@ -498,6 +550,9 @@ def sidebar(active):
     nav = (f"<nav class='line-sidebar line-sidebar--markers line-sidebar--scale-tick' "
            f"data-active='{active_idx}' data-radius='120'>"
            f"<ul class=line-sidebar__list>{lis}</ul></nav>")
+    ident = current()
+    name = ident["note"] if ident else "Guest"
+    role = "Master admin" if is_admin() else ("Invited user" if ident else "Preview")
     return (f"<aside class=side>"
             f"<a class=brand href='/'><span class=mk>i</span>"
             f"<span class=nm>ingre<span>x</span>"
@@ -506,9 +561,9 @@ def sidebar(active):
             f"<div class=upsell><b>Pilot preview</b>"
             f"<p>Price history, analytics & verified supplier insights are on the roadmap.</p>"
             f"<a href='/'>Explore catalogue</a></div>"
-            f"<div class=me><span class=av>SL</span>"
-            f"<span><span class=nm>Sapiens Labs</span><br>"
-            f"<span class=rl>Purchase Manager</span></span></div></aside>")
+            f"<div class=me><span class=av>{E(initials(name))}</span>"
+            f"<span><span class=nm>{E(name)}</span><br>"
+            f"<span class=rl>{role}</span></span></div></aside>")
 
 
 def topbar(q=""):
@@ -539,7 +594,7 @@ def topbar(q=""):
             f"<span class=grow></span>"
             f"<span class=live title='Users active in the last 5 minutes'>"
             f"<span class=pulse></span>{online_count()} online</span>"
-            f"{bell}<span class=av>SL</span></div>")
+            f"{bell}<span class=av>{E(initials(current()['note'] if current() else 'Guest'))}</span></div>")
 
 
 # Badge = unread. Hidden once this device has "seen" the current activity
@@ -619,9 +674,23 @@ def doc_tags(docs):
         or "<span class=mut>none listed</span>"
 
 
-MONO = ["#0d7a56", "#6a58c4", "#c47f1c", "#2f7cc4", "#b5486e", "#3f8a1c", "#0e8a8a"]
 MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+# Per-category illustration: (dark, light) gradient + an emoji glyph. Replaces the
+# old letter monograms with a stylised "powder tile" — no external image deps.
+CAT_ART = {
+    "Herbal Extract": ("#2f6d1a", "#a8e05a", "🌿"),
+    "Vitamin":        ("#b06a10", "#f4c95b", "💊"),
+    "Protein":        ("#215a94", "#8cc0ec", "🥛"),
+    "Mineral":        ("#4a5563", "#aeb9c6", "🧂"),
+    "Amino Acid":     ("#4a3a9c", "#b3a4e6", "🧬"),
+    "Probiotic":      ("#0a6d6d", "#5fd0d0", "🦠"),
+    "Lipid":          ("#a13457", "#e6a6bb", "🐟"),
+    "Active":         ("#0a5d41", "#5fe0a6", "⚗️"),
+    "Protein Isolate": ("#215a94", "#8cc0ec", "🥛"),
+}
+_DEFAULT_ART = ("#4b6a5e", "#9fc0b2", "✦")
 
 
 def greeting():
@@ -629,31 +698,56 @@ def greeting():
     return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
 
 
-def mono(name):
-    """Colour + 2-letter monogram, replacing the ingredient photo."""
-    words = [w for w in re.split(r"[^A-Za-z0-9]+", name) if w]
-    ini = (words[0][:2] if len(words) == 1 else words[0][0] + words[1][0]).upper()
-    grad = MONO[sum(map(ord, name)) % len(MONO)]
-    return grad, ini
+def ing_image(r):
+    """Stylised powder-mound illustration coloured by category (no photo assets)."""
+    c1, c2, glyph = CAT_ART.get(r["category"], _DEFAULT_ART)
+    return (f"<div class=iimg>"
+            f"<svg viewBox='0 0 120 118' preserveAspectRatio='xMidYMax slice' aria-hidden=true>"
+            f"<defs><linearGradient id='bg{r['id']}' x1=0 y1=0 x2=0 y2=1>"
+            f"<stop offset=0 stop-color='{c2}'/><stop offset=1 stop-color='{c1}'/></linearGradient></defs>"
+            f"<rect width=120 height=118 fill='url(#bg{r['id']})'/>"
+            f"<ellipse cx=60 cy=112 rx=48 ry=9 fill='rgba(0,0,0,.12)'/>"
+            f"<path d='M14 108 C40 66 52 56 60 56 C68 56 80 66 106 108 Z' fill='rgba(255,255,255,.9)'/>"
+            f"<path d='M14 108 C40 66 52 56 60 56 C63 60 56 78 40 108 Z' fill='rgba(255,255,255,.55)'/>"
+            f"<circle cx=42 cy=101 r=2.4 fill='rgba(255,255,255,.8)'/>"
+            f"<circle cx=80 cy=103 r=2.8 fill='rgba(255,255,255,.7)'/>"
+            f"<circle cx=92 cy=99 r=1.8 fill='rgba(255,255,255,.6)'/>"
+            f"<circle cx=30 cy=104 r=1.7 fill='rgba(255,255,255,.6)'/></svg>"
+            f"<span class=iglyph>{glyph}</span></div>")
 
 
-def icard(r, wl=frozenset(), back="/"):
-    grad, ini = mono(r["name"])
-    price = (f"₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
+def icard(r, wl=frozenset(), back="/", moves=None):
+    price = (f"₹{r['lo']:,.0f}–{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
              if r["lo"] else "<span class=mut>No offers</span>")
-    upd = f" · upd {E(r['updated'])}" if r["updated"] else ""
+    rating = (f"<span class=st>★</span> {r['rating']:.1f}" if r["rating"]
+              else "<span class=new>New</span>")
+    today = date.today().isoformat()
+    updated = ("Updated today" if r["updated"] == today
+               else f"Updated {E(r['updated'])}" if r["updated"] else "—")
+    pct = (moves or {}).get(r["id"])
+    if pct is None:
+        badge = "<span class='ibadge flat'>Compare</span>"
+    elif pct <= 0:
+        badge = f"<span class='ibadge down'>▼ Best price</span>"
+    else:
+        badge = f"<span class='ibadge up'>▲ {pct:.1f}%</span>"
     on = r["id"] in wl
     star = (f"<a class='star{' on' if on else ''}' "
             f"href='/watch?id={r['id']}&back={urllib.parse.quote(back)}' "
             f"title='{'Remove from' if on else 'Add to'} watchlist' "
             f"aria-label='toggle watchlist'>{'★' if on else '☆'}</a>")
     return (f"<div class=iwrap>{star}"
-            f"<a class=icard href='/ingredient/{r['id']}'>"
-            f"<div class=mono style='background:linear-gradient(135deg,{grad},{grad}cc)'>{ini}</div>"
-            f"<div class=nm>{E(r['name'])}</div>"
-            f"<div class=ct>{E(r['category'])}</div>"
-            f"<div class=pr>{price}</div>"
-            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s){upd}</div></a></div>")
+            f"<a class=icard href='/ingredient/{r['id']}'>{ing_image(r)}"
+            f"<div class=irate>{rating}</div>"
+            f"<div class=inm>{E(r['name'])}</div>"
+            f"<div class=iprice>{price}</div>"
+            f"<div class=isup>{r['vendors']} Supplier{'' if r['vendors'] == 1 else 's'}</div>"
+            f"<div class=foot>{badge}<span class=iupd>{updated}</span></div></a></div>")
+
+
+def moves_map(con):
+    """{ingredient_id: month-over-month % change} for the whole catalogue."""
+    return {m["id"]: m["pct"] for m in market_movers(con, limit=999)}
 
 
 def market_movers(con, limit=6):
@@ -743,7 +837,9 @@ def price_chart(points, w=560, h=210):
 def search_ingredients(con, q="", kind="", doc="", maxp=None):
     sql = """
     SELECT i.*, COUNT(DISTINCT o.vendor_id) vendors,
-           MIN(o.price_min) lo, MAX(o.price_max) hi, MAX(o.updated) updated
+           MIN(o.price_min) lo, MAX(o.price_max) hi, MAX(o.updated) updated,
+           (SELECT AVG(score) FROM rating r JOIN offer o2 ON o2.vendor_id = r.vendor_id
+            WHERE o2.ingredient_id = i.id) rating
     FROM ingredient i
     LEFT JOIN offer o ON o.ingredient_id = i.id
     LEFT JOIN vendor v ON v.id = o.vendor_id
@@ -819,7 +915,7 @@ def top_suppliers(con, limit=3):
         ORDER BY a DESC LIMIT ?""", (limit,)).fetchall()
     out = ""
     for v in rows:
-        _, ini = mono(v["name"])
+        ini = initials(v["name"])
         out += (f"<div class=sup><span class=av>{ini}</span>"
                 f"<span><span class=nm>{E(v['name'])}</span><br>"
                 f"<span class=lc>{E(v['city'])}, {E(v['country'])}</span></span>"
@@ -831,6 +927,7 @@ def top_suppliers(con, limit=3):
 
 def view_dashboard(con, wl=frozenset()):
     rows = search_ingredients(con)
+    mv = moves_map(con)
     feat = max(rows, key=lambda r: r["vendors"] or 0)
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
@@ -851,7 +948,7 @@ def view_dashboard(con, wl=frozenset()):
         <div class=ph><h3>Find ingredients. Compare. Source smart.</h3>
           <a href='/search'>View all →</a></div>
         {category_pills(con)}
-        <div class=icards>{"".join(icard(r, wl, "/") for r in rows[:10])}</div>
+        <div class=icards>{"".join(icard(r, wl, "/", mv) for r in rows[:10])}</div>
       </div>
       <div class=duo>
         <div class='panel pad'>
@@ -885,6 +982,7 @@ def view_search(con, params, wl=frozenset()):
         doc = ""
 
     rows = search_ingredients(con, q, kind, doc, maxp)
+    mv = moves_map(con)
     qs = urllib.parse.urlencode({k: v for k, v in
                                  [("q", q), ("kind", kind), ("doc", doc), ("maxp", raw)] if v})
     back = "/search" + (f"?{qs}" if qs else "")
@@ -905,13 +1003,14 @@ def view_search(con, params, wl=frozenset()):
         <button>Search</button>
       </form></div>
       <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
-      <div class=icards>{"".join(icard(r, wl, back) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
+      <div class=icards>{"".join(icard(r, wl, back, mv) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
     return page("Search", body, active="search", q=q)
 
 
 def view_watchlist(con, wl=frozenset()):
     rows = [r for r in search_ingredients(con) if r["id"] in wl] if wl else []
-    grid = "".join(icard(r, wl, "/watchlist") for r in rows)
+    mv = moves_map(con)
+    grid = "".join(icard(r, wl, "/watchlist", mv) for r in rows)
     inner = (f"<div class=icards>{grid}</div>" if grid else
              "<div class='panel pad'><p class=empty>Nothing here yet — tap the ☆ on any "
              "ingredient to track its price and vendors on this device.</p></div>")
@@ -920,6 +1019,60 @@ def view_watchlist(con, wl=frozenset()):
         <div class=sub>Ingredients you're tracking on this device.</div></div>
       {inner}"""
     return page("Watchlist", body, active="watch")
+
+
+def _ago(s):
+    return "just now" if s < 15 else f"{s}s ago" if s < 60 else f"{s // 60}m ago"
+
+
+def view_admin(con):
+    who = online_list()
+    online_rows = "".join(
+        f"""<tr><td><b>{E(u['label'])}</b></td>
+        <td class=metaline>{E(u['code'] or '—')}</td>
+        <td class=metaline>{E(u['ip'])}</td>
+        <td>{'<span class=tag>admin</span>' if u['admin'] else ''}</td>
+        <td class=metaline>{_ago(u['ago'])}</td></tr>""" for u in who) \
+        or "<tr><td colspan=5 class=empty>No one online right now.</td></tr>"
+
+    invites = con.execute(
+        "SELECT * FROM invite ORDER BY is_admin DESC, revoked, created DESC").fetchall()
+    inv_rows = ""
+    for iv in invites:
+        status = ("<span class='tag kind Trader'>admin</span>" if iv["is_admin"]
+                  else "<span class=tag style='color:#b4541c;border-color:#e6c3ad'>revoked</span>"
+                  if iv["revoked"] else "<span class='tag func'>active</span>")
+        action = ("" if iv["is_admin"] or iv["revoked"] else
+                  f"<form method=post action='/admin/revoke' style='margin:0'>"
+                  f"<input type=hidden name=code value='{E(iv['code'])}'>"
+                  f"<button class=xbtn>Revoke</button></form>")
+        link = "" if iv["revoked"] else f"<code class=inv>/login?code={E(iv['code'])}</code>"
+        inv_rows += (f"<tr><td><code class=inv>{E(iv['code'])}</code>{link and '<br>' + link}</td>"
+                     f"<td>{E(iv['note'] or '')}</td><td>{status}</td>"
+                     f"<td class=metaline>{E(iv['created'] or '')}</td><td>{action}</td></tr>")
+
+    body = f"""
+      <div class=hi><h1>Admin</h1>
+        <div class=sub>Manage invites and see who's using the pilot right now.</div></div>
+      <div class='panel pad'>
+        <div class=ph><h3>Online now</h3><span class=count>{len(who)} active · last 5 min</span></div>
+        <div class=tablewrap style='margin-top:14px'><table>
+          <thead><tr><th>User</th><th>Invite code</th><th>IP</th><th></th><th>Last active</th></tr></thead>
+          <tbody>{online_rows}</tbody></table></div>
+      </div>
+      <div class='panel pad'>
+        <div class=ph><h3>Invite codes</h3></div>
+        <form method=post action='/admin/invite' class=filters style='margin:14px 0 4px'>
+          <input name=note placeholder='Company / person this invite is for' maxlength=80 style='flex:1'>
+          <button>Generate invite</button>
+        </form>
+        <div class=metaline style='margin-bottom:12px'>Share the generated
+          <code class=inv>/login?code=…</code> link (prepend your domain) or just the code.</div>
+        <div class=tablewrap><table>
+          <thead><tr><th>Code / link</th><th>For</th><th>Status</th><th>Created</th><th></th></tr></thead>
+          <tbody>{inv_rows}</tbody></table></div>
+      </div>"""
+    return page("Admin", body, active="admin")
 
 
 def view_ingredient(con, ing_id, wl=frozenset()):
@@ -1073,19 +1226,27 @@ ONLINE_LOCK = threading.Lock()
 ONLINE_WINDOW = 300  # seconds since last request to still count as "online"
 
 
-def touch_online(cid):
+def touch_online(key, label="Guest", code="", ip="", admin=False):
     now = time.time()
     with ONLINE_LOCK:
-        ONLINE[cid] = now
-        for k, t in list(ONLINE.items()):
-            if now - t > ONLINE_WINDOW:
+        ONLINE[key] = {"t": now, "label": label, "code": code, "ip": ip, "admin": admin}
+        for k, v in list(ONLINE.items()):
+            if now - v["t"] > ONLINE_WINDOW:
                 del ONLINE[k]
 
 
 def online_count():
     now = time.time()
     with ONLINE_LOCK:
-        return sum(1 for t in ONLINE.values() if now - t <= ONLINE_WINDOW)
+        return sum(1 for v in ONLINE.values() if now - v["t"] <= ONLINE_WINDOW)
+
+
+def online_list():
+    now = time.time()
+    with ONLINE_LOCK:
+        rows = [dict(v, ago=int(now - v["t"])) for v in ONLINE.values()
+                if now - v["t"] <= ONLINE_WINDOW]
+    return sorted(rows, key=lambda r: r["ago"])
 
 
 # ---------- watchlist (per-device cookie) ----------
@@ -1105,21 +1266,49 @@ def safe_back(path):
     return path if path.startswith("/") and not path.startswith("//") else "/"
 
 
-# ---------- auth gate ----------
+# ---------- invite-only auth ----------
+# Access is granted by an invite code (admin-issued). The auth cookie carries
+# "code.signature"; the code is the real secret, the DB lookup enforces revocation.
+CTX = threading.local()          # per-request identity, read by sidebar()/topbar()
 
-def auth_token():
-    return hmac.new(AUTH_SECRET, b"pilot-v1", hashlib.sha256).hexdigest()
 
-
-def is_authed(headers):
-    if not AUTH_PW:                      # gate disabled
-        return True
-    want = auth_token()
+def _cookie(headers, name):
     for part in headers.get("Cookie", "").split(";"):
         k, _, v = part.strip().partition("=")
-        if k == COOKIE and hmac.compare_digest(v, want):
-            return True
-    return False
+        if k == name:
+            return v
+    return ""
+
+
+def sign_code(code):
+    return hmac.new(AUTH_SECRET, code.encode(), hashlib.sha256).hexdigest()
+
+
+def auth_cookie(code):
+    return (f"{COOKIE}={code}.{sign_code(code)}; Max-Age={COOKIE_MAXAGE}; "
+            "Path=/; HttpOnly; SameSite=Lax; Secure")
+
+
+def gate_active(con):
+    return con.execute("SELECT 1 FROM invite WHERE revoked=0 LIMIT 1").fetchone() is not None
+
+
+def identity(con, headers):
+    """Return the invite row for a validly signed, non-revoked cookie, else None."""
+    raw = _cookie(headers, COOKIE)
+    code, _, sig = raw.rpartition(".")
+    if not code or not hmac.compare_digest(sig, sign_code(code)):
+        return None
+    return con.execute("SELECT * FROM invite WHERE code=? AND revoked=0", (code,)).fetchone()
+
+
+def current():
+    return getattr(CTX, "ident", None)
+
+
+def is_admin():
+    ident = current()
+    return bool(ident and ident["is_admin"])
 
 
 LOGIN_CSS = """
@@ -1178,10 +1367,10 @@ button:active{transform:translateY(1px)}
 """
 
 
-def login_page(err=""):
-    lock = ("<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke='%23bff3dd' "
-            "stroke-width=2 stroke-linecap=round><rect x=4 y=11 width=16 height=10 rx=2/>"
-            "<path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>").replace("%23", "#")
+def login_page(err="", prefill=""):
+    key = ("<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke='#bff3dd' "
+           "stroke-width=2 stroke-linecap=round><circle cx=8 cy=15 r=4/>"
+           "<path d='M10.8 12.2 21 2M17 6l2 2M14 9l2 2'/></svg>")
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>Sign in · Ingrex</title><style>{LOGIN_CSS}</style>"
@@ -1190,14 +1379,14 @@ def login_page(err=""):
             f"<div class=tint></div>"
             f"<div class=glass>"
             f"<div class=brand>ingre<span>x</span></div>"
-            f"<div class=tag>Nutraceutical sourcing · Pilot</div>"
-            f"<p class=lead>Invite-only preview. Enter the access password your Ingrex "
-            f"contact shared — you'll stay signed in on this device.</p>"
+            f"<div class=tag>Nutraceutical sourcing · Invite only</div>"
+            f"<p class=lead>Enter the invite code from your Ingrex contact. "
+            f"Don't have one? Ask your account manager for an invite.</p>"
             f"{f'<div class=err>{E(err)}</div>' if err else ''}"
             f"<form method=post action='/login'>"
-            f"<div class=field>{lock}"
-            f"<input type=password name=pw placeholder='Access password' required autofocus "
-            f"autocomplete=current-password></div>"
+            f"<div class=field>{key}"
+            f"<input name=code value='{E(prefill)}' placeholder='Invite code' required "
+            f"autofocus autocomplete=off spellcheck=false></div>"
             f"<button>Enter portal</button></form>"
             f"<div class=foot>Ingrex · B2B ingredient intelligence</div>"
             f"</div></html>").encode()
@@ -1262,28 +1451,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
             remaining -= len(chunk)
         f.close()
 
+    def _client_ip(self):
+        return (self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                or self.client_address[0])
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
         if url.path == "/bg.mp4":
             return self._serve_video()
-        if url.path == "/login":
-            return self._send(login_page())
-        if not is_authed(self.headers):
-            return self._redirect("/login")
-        xff = self.headers.get("X-Forwarded-For", "")
-        touch_online(xff.split(",")[0].strip() or self.client_address[0])
-        wl = watched_ids(self.headers)
-        if url.path == "/watch":
-            iid = int(params.get("id", ["0"])[0]) if params.get("id", ["0"])[0].isdigit() else 0
-            if iid:
-                wl.symmetric_difference_update({iid})   # toggle membership
-            val = ".".join(str(i) for i in sorted(wl))
-            cookie = (f"{WATCH_COOKIE}={val}; Max-Age=15552000; "
-                      "Path=/; HttpOnly; SameSite=Lax; Secure")
-            return self._redirect(safe_back(params.get("back", ["/"])[0]), cookie)
         con = connect()
         try:
+            gated = gate_active(con)
+            ident = identity(con, self.headers) if gated else None
+            CTX.ident = ident
+            if url.path == "/login":
+                return self._send(login_page(prefill=params.get("code", [""])[0][:64]))
+            if gated and not ident:
+                code = params.get("code", [""])[0][:64]
+                return self._redirect("/login" + (f"?code={urllib.parse.quote(code)}" if code else ""))
+            touch_online(f"{ident['code'] if ident else 'anon'}|{self._client_ip()}",
+                         ident["note"] if ident else "Guest", ident["code"] if ident else "",
+                         self._client_ip(), is_admin())
+            wl = watched_ids(self.headers)
+            if url.path == "/watch":
+                iid = int(params.get("id", ["0"])[0]) if params.get("id", ["0"])[0].isdigit() else 0
+                if iid:
+                    wl.symmetric_difference_update({iid})   # toggle membership
+                val = ".".join(str(i) for i in sorted(wl))
+                cookie = (f"{WATCH_COOKIE}={val}; Max-Age=15552000; "
+                          "Path=/; HttpOnly; SameSite=Lax; Secure")
+                return self._redirect(safe_back(params.get("back", ["/"])[0]), cookie)
             if url.path == "/":
                 out = view_dashboard(con, wl)
             elif url.path == "/search":
@@ -1292,6 +1490,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out = view_watchlist(con, wl)
             elif url.path == "/vendors":
                 out = view_vendors(con)
+            elif url.path == "/admin":
+                out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
                 out = view_ingredient(con, int(m[1]), wl)
             elif m := re.fullmatch(r"/vendor/(\d+)", url.path):
@@ -1302,31 +1502,48 @@ class Handler(http.server.BaseHTTPRequestHandler):
                        200 if out else 404)
         finally:
             con.close()
+            CTX.ident = None
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
         n = min(int(self.headers.get("Content-Length") or 0), 8192)
         body = self.rfile.read(n).decode("utf-8", "replace")
-
-        if path == "/login":
-            pw = urllib.parse.parse_qs(body).get("pw", [""])[0]
-            if AUTH_PW and hmac.compare_digest(pw, AUTH_PW):
-                cookie = (f"{COOKIE}={auth_token()}; Max-Age={COOKIE_MAXAGE}; "
-                          "Path=/; HttpOnly; SameSite=Lax; Secure")
-                return self._redirect("/", cookie)
-            time.sleep(1)   # ponytail: crude brute-force damper; use a long passphrase
-            return self._send(login_page("Wrong password."), 401)
-
-        if not is_authed(self.headers):
-            return self._redirect("/login")
-        if path != "/rate":
-            return self._send(page("Not found", "<h1>404</h1>"), 404)
         con = connect()
         try:
-            vid, msg = post_rate(con, body)
+            gated = gate_active(con)
+            ident = identity(con, self.headers) if gated else None
+            CTX.ident = ident
+            if path == "/login":
+                code = urllib.parse.parse_qs(body).get("code", [""])[0].strip()[:64]
+                row = con.execute("SELECT * FROM invite WHERE code=? AND revoked=0",
+                                  (code,)).fetchone()
+                if row:
+                    return self._redirect("/admin" if row["is_admin"] else "/", auth_cookie(code))
+                time.sleep(1)   # ponytail: crude brute-force damper on code guessing
+                return self._send(login_page("Invalid or revoked invite code.", code), 401)
+            if gated and not ident:
+                return self._redirect("/login")
+            admin = is_admin() or not gated
+            if path == "/rate":
+                vid, msg = post_rate(con, body)
+                return self._redirect(
+                    f"/vendor/{vid}?msg={urllib.parse.quote(msg)}" if vid else "/vendors")
+            if path == "/admin/invite" and admin:
+                f = urllib.parse.parse_qs(body)
+                note = f.get("note", [""])[0].strip()[:80] or "Invitee"
+                con.execute("INSERT INTO invite(code,note,created) VALUES(?,?,?)",
+                            (secrets.token_urlsafe(6), note, date.today().isoformat()))
+                con.commit()
+                return self._redirect("/admin")
+            if path == "/admin/revoke" and admin:
+                code = urllib.parse.parse_qs(body).get("code", [""])[0]
+                con.execute("UPDATE invite SET revoked=1 WHERE code=? AND is_admin=0", (code,))
+                con.commit()
+                return self._redirect("/admin")
+            self._send(page("Not found", "<h1>404</h1>"), 404)
         finally:
             con.close()
-        self._redirect(f"/vendor/{vid}?msg={urllib.parse.quote(msg)}" if vid else "/vendors")
+            CTX.ident = None
 
     def log_message(self, fmt, *a):
         sys.stderr.write("%s %s\n" % (self.address_string(), fmt % a))
@@ -1379,13 +1596,16 @@ def demo():
     for v in range(1, len(SEED_VENDORS) + 1):
         assert view_vendor(con, v)
     assert view_ingredient(con, 9999) is None and view_vendor(con, 9999) is None
-    # presence: distinct clients counted, stale ones drop out of the window
+    # presence: distinct clients counted, labels carried, stale ones drop out
     ONLINE.clear()
-    touch_online("1.1.1.1")
-    touch_online("2.2.2.2")
-    touch_online("1.1.1.1")
+    touch_online("a|1.1.1.1", "Acme", "a", "1.1.1.1")
+    touch_online("b|2.2.2.2", "Beta", "b", "2.2.2.2", admin=True)
+    touch_online("a|1.1.1.1", "Acme", "a", "1.1.1.1")
     assert online_count() == 2, "distinct clients"
-    ONLINE["3.3.3.3"] = time.time() - ONLINE_WINDOW - 1
+    assert {u["label"] for u in online_list()} == {"Acme", "Beta"}
+    assert any(u["admin"] for u in online_list())
+    ONLINE["c|3.3.3.3"] = {"t": time.time() - ONLINE_WINDOW - 1, "label": "x",
+                           "code": "c", "ip": "3.3.3.3", "admin": False}
     assert online_count() == 2, "stale client excluded"
     ONLINE.clear()
 
@@ -1410,21 +1630,35 @@ def demo():
     assert b"Watching" in view_ingredient(con, 1, {1})
     assert view_watchlist(con, {1, 2}) and view_watchlist(con, set())
 
-    # auth gate: token unforgeable, cookie round-trips, gate off when no pw
-    global AUTH_PW, AUTH_SECRET
-    assert is_authed({}) is True, "gate must be open when no password set"
-    AUTH_PW, AUTH_SECRET = "s3cret", b"s3cret"
-    try:
-        good = auth_token()
-        assert is_authed({"Cookie": f"{COOKIE}={good}"}) is True
-        assert is_authed({}) is False
-        assert is_authed({"Cookie": f"{COOKIE}=deadbeef"}) is False
-        assert is_authed({"Cookie": "other=1"}) is False
-        # a cookie signed with a different secret must not validate
-        AUTH_SECRET = b"different"
-        assert is_authed({"Cookie": f"{COOKIE}={good}"}) is False
-    finally:
-        AUTH_PW, AUTH_SECRET = "", b"dev"
+    # invite auth: gate off with no invites; valid signed cookie admits, forgery rejected
+    assert gate_active(con) is False, "no invites => open gate"
+    con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('CODE1','Acme',0,'d')")
+    con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('ADMINX','Boss',1,'d')")
+    con.commit()
+    assert gate_active(con) is True
+    good = f"{COOKIE}=CODE1.{sign_code('CODE1')}"
+    assert identity(con, {"Cookie": good})["note"] == "Acme"
+    assert identity(con, {}) is None
+    assert identity(con, {"Cookie": f"{COOKIE}=CODE1.deadbeef"}) is None, "bad signature"
+    assert identity(con, {"Cookie": f"{COOKIE}=NOPE.{sign_code('NOPE')}"}) is None, "unknown code"
+    admin_c = f"{COOKIE}=ADMINX.{sign_code('ADMINX')}"
+    assert identity(con, {"Cookie": admin_c})["is_admin"] == 1
+    # revocation locks out
+    con.execute("UPDATE invite SET revoked=1 WHERE code='CODE1'")
+    con.commit()
+    assert identity(con, {"Cookie": good}) is None, "revoked code denied"
+    # admin view + presence-aware rendering via CTX
+    CTX.ident = identity(con, {"Cookie": admin_c})
+    assert is_admin() and b"Online now" in view_admin(con) and b"Admin" in view_dashboard(con)
+    CTX.ident = None
+    con.execute("DELETE FROM invite")
+    con.commit()
+
+    # new card: rating, powder image, price-move badge, updated label
+    dash = view_dashboard(con)
+    assert b"iimg" in dash and b"ibadge" in dash and b"Supplier" in dash and b"Updated" in dash
+    assert "🌿" in ing_image({"id": 1, "category": "Herbal Extract"})
+    assert search_ingredients(con)[0]["rating"] is not None
 
     # sparkline: direction and degenerate input
     assert "class=up" in sparkline([("a", 10), ("b", 20)])
