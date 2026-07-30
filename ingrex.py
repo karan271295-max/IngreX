@@ -439,6 +439,19 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .xbtn:hover{background:#fbe9df}
 code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
   padding:2px 7px;border-radius:6px;color:var(--ink)}
+/* ingredient detail two-column: suppliers left, trend + facts right */
+.igrid{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
+.iside{position:sticky;top:66px}
+.iside .tchart svg{width:100%}
+.facts{display:flex;flex-direction:column;gap:0}
+.fact{display:flex;align-items:center;justify-content:space-between;padding:8px 0;
+  border-bottom:1px solid var(--line2);font-size:12.5px}
+.fact:last-child{border-bottom:0}
+.fact .fl{color:var(--mut);font-weight:600}
+.fact .fv{color:var(--ink);font-weight:700}
+.fact .funit{color:var(--mut);font-weight:500;font-size:11px}
+@media(max-width:820px){.igrid{grid-template-columns:1fr}.iside{position:static;order:-1}}
+
 /* marketplace-style supplier cards (ingredient detail) */
 .vlist{display:flex;flex-direction:column;gap:10px}
 .vcard{display:flex;gap:13px;align-items:center;background:#fff;border:1px solid var(--line);
@@ -874,7 +887,7 @@ def price_chart(points, w=620, h=220):
     for (m, v), x, y in zip(points, xs, ys):
         yr, mm = m.split("-")
         label = f"{MON_ABBR[int(mm)]} {yr}"
-        dots += f"<circle class=tdot cx={x:.1f} cy={y:.1f} r=3 fill='var(--acc)'/>"
+        dots += f"<circle class=tdot cx={x:.1f} cy={y:.1f} r=1.8 fill='var(--acc)' opacity=.55/>"
         hits += (f"<rect class=thit x={x - iw / (n - 1) / 2:.1f} y={pt} "
                  f"width={iw / (n - 1):.1f} height={ih} fill=transparent "
                  f"data-x='{x:.1f}' data-y='{y:.1f}' data-m='{E(label)}' data-v='₹{v:,.0f}'/>")
@@ -883,16 +896,18 @@ def price_chart(points, w=620, h=220):
         f"<text x={xs[i]:.1f} y={h - 8} text-anchor=middle class=axl>"
         f"{MON_ABBR[int(m.split('-')[1])]}</text>"
         for i, (m, _) in enumerate(points) if i % step == 0 or i == n - 1)
+    gid = f"g{points[0][0]}{n}"
     return (f"<div class=tchart>"
             f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
-            f"<defs><linearGradient id=g x1=0 y1=0 x2=0 y2=1>"
-            f"<stop offset=0 stop-color='var(--acc)' stop-opacity=.18/>"
+            f"<defs><linearGradient id={gid} x1=0 y1=0 x2=0 y2=1>"
+            f"<stop offset=0 stop-color='var(--acc)' stop-opacity=.10/>"
             f"<stop offset=1 stop-color='var(--acc)' stop-opacity=0/></linearGradient></defs>"
-            f"{grid}<polygon points='{area}' fill='url(#g)'/>"
-            f"<polyline points='{line}' fill=none stroke='var(--acc)' stroke-width=2 "
+            f"{grid}<polygon points='{area}' fill='url(#{gid})'/>"
+            f"<polyline points='{line}' fill=none stroke='var(--acc)' stroke-width=1.75 "
             f"stroke-linejoin=round stroke-linecap=round/>"
             f"<line class=tguide x1=0 y1={pt} x2=0 y2={pt + ih} stroke='var(--acc)' "
-            f"stroke-dasharray='3 3' opacity=0/><circle class=tcursor r=5 fill='var(--acc)' opacity=0/>"
+            f"stroke-dasharray='3 3' opacity=0/><circle class=tcursor r=4 fill='var(--acc)' "
+            f"stroke='#fff' stroke-width=1.5 opacity=0/>"
             f"{dots}{xl}{hits}</svg><div class=ttip></div></div>")
 
 
@@ -1169,31 +1184,45 @@ def view_ingredient(con, ing_id, wl=frozenset()):
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
         (ing_id,)).fetchall()
     cheapest = min((o["price_min"] for o in offers), default=None)
+    dearest = max((o["price_max"] for o in offers), default=None)
     cards = "".join(vendor_card(o, ing, best=(o["price_min"] == cheapest)) for o in offers)
     last_upd = max((o["updated"] for o in offers if o["updated"]), default=None)
+    pct = ((trend[-1]["price"] - trend[0]["price"]) / trend[0]["price"] * 100
+           if trend and trend[0]["price"] else None)
+    pct_html = (f"<span class={'up' if pct >= 0 else 'down'}>{'+' if pct >= 0 else ''}{pct:.1f}%</span>"
+                if pct is not None else "—")
+    facts = f"""<div class=facts>
+      <div class=fact><span class=fl>Price range</span>
+        <span class=fv>{'₹%s–%s' % (f"{cheapest:,.0f}", f"{dearest:,.0f}") if cheapest else '—'}
+        <span class=funit>/{E(ing['unit'])}</span></span></div>
+      <div class=fact><span class=fl>Suppliers</span><span class=fv>{len(offers)}</span></div>
+      <div class=fact><span class=fl>12-mo change</span><span class=fv>{pct_html}</span></div>
+      <div class=fact><span class=fl>Updated</span><span class=fv>{E(last_upd or '—')}</span></div>
+    </div>"""
 
     return page(ing["name"], f"""
       <a class=back href='/'>← Ingredients</a>
       <div class=titlerow><h1>{E(ing['name'])}</h1>{wbtn}</div>
       <p class=metaline>{E(ing['category'])} · CAS {E(ing['cas'])}</p>
-      <div class=chips style='margin:10px 0 18px'>
+      <div class=chips style='margin:9px 0 16px'>
         {"".join(f"<span class='tag func'>{E(f.strip())}</span>" for f in ing['functions'].split(','))}</div>
-      <div class=card style='color:var(--body)'>{E(ing['description'])}</div>
-      <h2>Market trend</h2>
-      <div class=card>
-        {price_chart([(m['month'], m['price']) for m in trend])}
-        <div class=metaline style='margin-top:10px'>Hover any point for that month's price ·
-        indicative ₹/{E(ing['unit'])}
-        {(f"· {trend[0]['month']} → {trend[-1]['month']} · "
-          f"<span class={'up' if trend[-1]['price'] >= trend[0]['price'] else 'down'}>"
-          f"{'+' if trend[-1]['price'] >= trend[0]['price'] else ''}"
-          f"{(trend[-1]['price'] - trend[0]['price']) / trend[0]['price'] * 100:.1f}%</span>")
-         if trend and trend[0]['price'] else ''}</div></div>
-      <div class=ph style='margin:34px 0 14px'>
-        <h2 style='margin:0'>{len(offers)} supplier{'' if len(offers) == 1 else 's'}</h2>
-        {f"<span class=count>Prices updated {E(last_upd)}</span>" if last_upd else ""}</div>
-      <div class=vlist>{cards or "<p class=empty>No suppliers listed yet.</p>"}</div>""",
-                active="search")
+      <div class=igrid>
+        <div class=imain>
+          <div class=ph style='margin-bottom:12px'>
+            <h2 style='margin:0'>{len(offers)} supplier{'' if len(offers) == 1 else 's'}</h2>
+            {f"<span class=count>Prices updated {E(last_upd)}</span>" if last_upd else ""}</div>
+          <div class=vlist>{cards or "<p class=empty>No suppliers listed yet.</p>"}</div>
+        </div>
+        <aside class=iside>
+          <div class=card style='margin:0 0 12px'>
+            <div class=ph><h3 style='font-size:13px'>Market trend</h3>{pct_html}</div>
+            <div style='margin-top:8px'>{price_chart([(m['month'], m['price']) for m in trend], 300, 150)}</div>
+            <div class=metaline style='margin-top:8px;font-size:11.5px'>Hover for a month's price ·
+              indicative ₹/{E(ing['unit'])}</div></div>
+          <div class=card style='margin:0 0 12px'>{facts}</div>
+          <div class=card style='margin:0;color:var(--body);font-size:12.5px'>{E(ing['description'])}</div>
+        </aside>
+      </div>""", active="search")
 
 
 def vendor_card(o, ing, best=False):
@@ -1226,24 +1255,36 @@ def vendor_card(o, ing, best=False):
             f"{cta}</div></div>")
 
 
-def view_vendors(con):
-    rows = con.execute("""
+def view_vendors(con, q=""):
+    q = (q or "").strip()
+    sql = """
         SELECT v.*, (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) a,
                (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n,
                (SELECT COUNT(*) FROM offer WHERE vendor_id=v.id) items
-        FROM vendor v ORDER BY a DESC NULLS LAST, v.name""").fetchall()
+        FROM vendor v"""
+    args = []
+    if q:
+        sql += " WHERE (v.name LIKE ? OR v.state LIKE ? OR v.poc LIKE ? OR v.gst LIKE ?)"
+        args = [f"%{q}%"] * 4
+    sql += " ORDER BY a DESC NULLS LAST, v.name"
+    rows = con.execute(sql, args).fetchall()
     cards = "".join(f"""<a class=tile href='/vendor/{v['id']}'>
         <div class=ttl>{E(v['name'])}</div>
-        <div style='margin:10px 0 8px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
+        <div style='margin:9px 0 7px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
           <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></div>
         <div style='margin-bottom:6px'>{stars(v['a'])} <span class=count>({v['n']})</span></div>
-        <div class=count>{v['items']} ingredient(s) listed</div>
-        <div class=chips style='margin-top:10px'>{doc_tags(v['docs'])}</div></a>""" for v in rows)
+        <div class=count>{v['items']} ingredient(s) listed</div></a>""" for v in rows)
     return page("Vendors", f"""
-      <h1>Vendors</h1>
-      <p class=lead>Manufacturers, traders and importers on the platform — ranked by
-         client and manufacturer ratings.</p>
-      <div class=grid>{cards}</div>""", active="suppliers")
+      <div class=hi><h1>Suppliers</h1>
+        <div class=sub>Manufacturers, traders and importers on the platform.</div></div>
+      <div class='panel pad' style='margin-bottom:16px'><form class=filters method=get action='/vendors'>
+        <input type=search name=q value='{E(q)}'
+          placeholder='Search suppliers by name, state, contact or GST…'>
+        <button>Search</button></form></div>
+      <h2 style='margin-top:0'>{len(rows)} supplier{'' if len(rows) == 1 else 's'}
+        {f'· “{E(q)}”' if q else ''}</h2>
+      <div class=grid>{cards or "<p class=empty>No suppliers matched.</p>"}</div>""",
+                active="suppliers")
 
 
 def view_vendor(con, vid, msg=""):
@@ -1764,7 +1805,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif url.path == "/watchlist":
                 out = view_watchlist(con, wl)
             elif url.path == "/vendors":
-                out = view_vendors(con)
+                out = view_vendors(con, params.get("q", [""])[0])
             elif url.path == "/admin":
                 out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
