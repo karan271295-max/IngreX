@@ -434,6 +434,45 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .xbtn:hover{background:#fbe9df}
 code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
   padding:2px 7px;border-radius:6px;color:var(--ink)}
+/* marketplace-style supplier cards (ingredient detail) */
+.vlist{display:flex;flex-direction:column;gap:14px}
+.vcard{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--line);
+  border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);
+  border-left:4px solid var(--cc,var(--acc));transition:box-shadow .16s,transform .16s}
+.vcard:hover{box-shadow:0 14px 30px -16px rgba(15,31,26,.28);transform:translateY(-1px)}
+.vmono{flex:none;width:56px;height:56px;border-radius:14px;display:grid;place-items:center;
+  font-size:19px;font-weight:800;color:#fff;letter-spacing:.02em;
+  background:linear-gradient(135deg,var(--cc),color-mix(in srgb,var(--cc) 60%,#0b0b0b))}
+.vbody{flex:1;min-width:0}
+.vtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.vname{font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.vname:hover{color:var(--acc-d)}
+.vbadge-best{font-size:11px;font-weight:800;color:#1b47c4;background:#e7edff;
+  padding:3px 9px;border-radius:7px;letter-spacing:.01em}
+.vbadge-verified{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;
+  color:#1f8a54;background:#e7f5ee;padding:3px 9px;border-radius:20px}
+.vmeta{display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;color:var(--mut)}
+.vr{font-weight:700;color:var(--ink)}.vr .st{color:var(--gold)}.vrn{color:var(--mut);font-weight:600}
+.vr-new{color:var(--mut);font-weight:600;background:var(--bg);padding:2px 8px;border-radius:20px;font-size:12px}
+.vdot{color:var(--line)}
+.vchips{display:flex;flex-wrap:wrap;gap:8px}
+.vchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--body);
+  background:var(--bg);border:1px solid var(--line);padding:5px 11px;border-radius:8px}
+.vchip.vkind{color:#fff;background:var(--acc);border:0}
+.vchip.vkind.Trader{background:#6a58c4}.vchip.vkind.Importer{background:#c47f1c}
+.vright{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:140px}
+.vprice{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1}
+.vprice .vunit{font-size:13px;font-weight:600;color:var(--mut)}
+.vpricesub{font-size:11px;color:var(--mut);margin-bottom:10px}
+.vbook{display:inline-block;background:var(--acc);color:#fff;font-weight:700;font-size:14px;
+  padding:10px 22px;border-radius:10px;box-shadow:0 6px 16px -8px rgba(13,122,86,.6)}
+.vbook:hover{background:var(--acc-d);color:#fff}
+@media(max-width:620px){
+  .vcard{flex-wrap:wrap}.vmono{width:46px;height:46px;font-size:16px}
+  .vright{min-width:0;width:100%;flex-direction:row;justify-content:space-between;align-items:center;
+    margin-top:8px;padding-top:12px;border-top:1px solid var(--line)}
+  .vpricesub{display:none}
+}
 .duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
 .trendsel{width:100%;font:inherit;font-size:14px;font-weight:600;padding:9px 12px;
   border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);cursor:pointer;
@@ -854,7 +893,8 @@ def vendor_rating(con, vendor_id):
 
 def offers_for_ingredient(con, ing_id):
     return con.execute("""
-        SELECT o.*, v.id vid, v.name vname, v.kind, v.city, v.docs,
+        SELECT o.*, v.id vid, v.name vname, v.kind, v.city, v.state, v.docs,
+               v.gst, v.email, v.poc,
                (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) avg_score,
                (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n_score
         FROM offer o JOIN vendor v ON v.id=o.vendor_id
@@ -1088,18 +1128,8 @@ def view_ingredient(con, ing_id, wl=frozenset()):
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
         (ing_id,)).fetchall()
-
-    rows = "".join(f"""<tr>
-        <td><a href='/vendor/{o['vid']}'><b>{E(o['vname'])}</b></a>
-            <div class=metaline>{E(o['city'])}</div></td>
-        <td><span class='tag kind {E(o['kind'])}'>{E(o['kind'])}</span></td>
-        <td><span class=price style='font-size:15px'>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f}</span>
-            <div class=metaline>per {E(o['unit'])}</div></td>
-        <td>{E(o['moq'] or '—')}</td>
-        <td>{str(o['lead_days']) + ' d' if o['lead_days'] else '—'}</td>
-        <td>{stars(o['avg_score'])}<div class=metaline>{o['n_score']} review(s)</div></td>
-        <td class=metaline>{E(o['updated'] or '—')}</td>
-        <td><div class=chips>{doc_tags(o['docs'])}</div></td></tr>""" for o in offers)
+    cheapest = min((o["price_min"] for o in offers), default=None)
+    cards = "".join(vendor_card(o, ing, best=(o["price_min"] == cheapest)) for o in offers)
     last_upd = max((o["updated"] for o in offers if o["updated"]), default=None)
 
     return page(ing["name"], f"""
@@ -1113,14 +1143,41 @@ def view_ingredient(con, ing_id, wl=frozenset()):
       <div class=card>{sparkline([(m['month'], m['price']) for m in trend], 560, 90)}
         <div class=metaline style='margin-top:10px'>Monthly average landed price, ₹/{E(ing['unit'])}
         {('· ' + str(trend[0]['month']) + ' → ' + str(trend[-1]['month'])) if trend else ''}</div></div>
-      <div class=ph style='margin:34px 0 12px'>
-        <h2 style='margin:0'>{len(offers)} vendor{'' if len(offers) == 1 else 's'}</h2>
-        {f"<span class=count>Prices last updated {E(last_upd)}</span>" if last_upd else ""}</div>
-      <div class=tablewrap><table>
-        <thead><tr><th>Vendor</th><th>Type</th><th>Price range</th><th>MOQ</th>
-            <th>Lead</th><th>Rating</th><th>Updated</th><th>Documents</th></tr></thead>
-        <tbody>{rows or "<tr><td colspan=8 class=empty>No vendors listed yet.</td></tr>"}</tbody>
-      </table></div>""", active="search")
+      <div class=ph style='margin:34px 0 14px'>
+        <h2 style='margin:0'>{len(offers)} supplier{'' if len(offers) == 1 else 's'}</h2>
+        {f"<span class=count>Prices updated {E(last_upd)}</span>" if last_upd else ""}</div>
+      <div class=vlist>{cards or "<p class=empty>No suppliers listed yet.</p>"}</div>""",
+                active="search")
+
+
+def vendor_card(o, ing, best=False):
+    """Marketplace-style supplier card with clear visual hierarchy."""
+    cc = cat_color(ing["category"])
+    ini = initials(o["vname"])
+    rating = (f"<span class=vr><span class=st>★</span> {o['avg_score']:.1f} "
+              f"<span class=vrn>({o['n_score']})</span></span>" if o["avg_score"]
+              else "<span class=vr vr-new>New supplier</span>")
+    verified = ("<span class=vbadge-verified>◈ Verified</span>"
+                if (o["gst"] or "").strip() else "")
+    bestbadge = "<span class=vbadge-best>Best Price</span>" if best else ""
+    chips = (f"<span class=vchip>◷ {E(o['moq'] or 'MOQ on request')}</span>"
+             f"<span class=vchip>⚑ Lead {str(o['lead_days']) + ' days' if o['lead_days'] else 'on request'}</span>"
+             f"<span class='vchip vkind {E(o['kind'])}'>{E(o['kind'])}</span>")
+    loc = f"{E(o['city'])}" + (f" · {E(o['state'])}" if o["state"] and o["state"] != o["city"] else "")
+    email = (o["email"] or "").split(",")[0].strip()
+    cta = (f"<a class=vbook href='mailto:{E(email)}?subject={urllib.parse.quote('Enquiry: ' + ing['name'])}'>Enquire</a>"
+           if email else f"<a class=vbook href='/vendor/{o['vid']}'>View</a>")
+    return (f"<div class=vcard style='--cc:{cc}'>"
+            f"<div class=vmono>{ini}</div>"
+            f"<div class=vbody>"
+            f"<div class=vtop>{bestbadge}"
+            f"<a class=vname href='/vendor/{o['vid']}'>{E(o['vname'])}</a>{verified}</div>"
+            f"<div class=vmeta>{rating}<span class=vdot>·</span><span class=vloc>{loc}</span></div>"
+            f"<div class=vchips>{chips}</div></div>"
+            f"<div class=vright>"
+            f"<div class=vprice>₹{o['price_min']:,.0f}–{o['price_max']:,.0f}<span class=vunit> /{E(o['unit'])}</span></div>"
+            f"<div class=vpricesub>indicative range</div>"
+            f"{cta}</div></div>")
 
 
 def view_vendors(con):
