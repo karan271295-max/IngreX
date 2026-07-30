@@ -639,6 +639,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", cookie)
         self.end_headers()
 
+    def do_HEAD(self):        # health checks / port scans (Render probes with HEAD)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
@@ -775,6 +780,6 @@ if __name__ == "__main__":
     else:
         init_db()
         port = int(sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PORT", 8000))
-        host = os.environ.get("HOST", "127.0.0.1")  # set HOST=0.0.0.0 when hosting
+        host = os.environ.get("HOST", "0.0.0.0")  # bind all interfaces so hosts can reach it
         print(f"ingrex on http://{host}:{port}  (db: {DB})")
         http.server.ThreadingHTTPServer((host, port), Handler).serve_forever()
