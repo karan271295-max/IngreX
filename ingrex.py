@@ -152,7 +152,108 @@ def months(n=12):
     return out
 
 
+# ---------- storage: SQLite locally, Postgres (Supabase/Neon) when DATABASE_URL set ----------
+# The app uses the tiny sqlite3-style API (execute/fetchone/fetchall/lastrowid/commit).
+# When DATABASE_URL is present these wrappers translate the same calls to Postgres, so the
+# data survives every deploy. No behaviour change locally — SQLite stays the default.
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+PG = bool(DATABASE_URL)
+_PG_ID_TABLES = ("vendor", "ingredient", "offer", "rating", "request", "req_note")
+
+
+class _Row:
+    """Dict- and tuple-indexable row, like sqlite3.Row."""
+    __slots__ = ("_c", "_v")
+
+    def __init__(self, cols, vals):
+        self._c, self._v = cols, vals
+
+    def __getitem__(self, k):
+        return self._v[k] if isinstance(k, int) else self._v[self._c.index(k)]
+
+    def keys(self):
+        return list(self._c)
+
+    def __iter__(self):
+        return iter(self._v)
+
+
+def _pg_sql(sql):
+    """Translate the SQLite-flavoured SQL the app writes into Postgres. Returns (sql, returns_id)."""
+    s = sql.strip()
+    ret = False
+    low = s.lower()
+    if low.startswith("create table"):
+        return s.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY").replace("?", "%s"), False
+    if low.startswith("insert or ignore into"):
+        s = re.sub(r"^insert or ignore into", "INSERT INTO", s, flags=re.I) + " ON CONFLICT DO NOTHING"
+    elif low.startswith("insert or replace into profile"):
+        s = (re.sub(r"^insert or replace into", "INSERT INTO", s, flags=re.I) +
+             " ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,company=EXCLUDED.company,"
+             "role=EXCLUDED.role,gst=EXCLUDED.gst,city=EXCLUDED.city,"
+             "completed=EXCLUDED.completed,created=EXCLUDED.created")
+    elif low.startswith("insert into"):
+        m = re.match(r"insert into (\w+)", s, re.I)
+        if m and m.group(1).lower() in _PG_ID_TABLES:
+            s += " RETURNING id"
+            ret = True
+    return s.replace("?", "%s"), ret
+
+
+class _PgCursor:
+    def __init__(self, raw, sql, params):
+        self._cur = raw.cursor()
+        s, ret = _pg_sql(sql)
+        self._cur.execute(s, tuple(params))
+        self.lastrowid = None
+        self._cols = [d[0] for d in self._cur.description] if self._cur.description else []
+        if ret:
+            row = self._cur.fetchone()
+            self.lastrowid = row[0] if row else None
+            self._cols = []
+
+    def fetchone(self):
+        r = self._cur.fetchone()
+        return _Row(self._cols, r) if r else None
+
+    def fetchall(self):
+        return [_Row(self._cols, r) for r in self._cur.fetchall()]
+
+    def __iter__(self):
+        for r in self._cur.fetchall():
+            yield _Row(self._cols, r)
+
+
+class _PgConn:
+    def __init__(self, raw):
+        self.raw = raw
+
+    def execute(self, sql, params=()):
+        return _PgCursor(self.raw, sql, params)
+
+    def executemany(self, sql, seq):
+        cur = self.raw.cursor()
+        s, _ = _pg_sql(sql)
+        for p in seq:
+            cur.execute(s, tuple(p))
+        cur.close()
+
+    def executescript(self, script):
+        cur = self.raw.cursor()
+        cur.execute(script.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY"))
+        cur.close()
+
+    def commit(self):
+        self.raw.commit()
+
+    def close(self):
+        self.raw.close()
+
+
 def connect():
+    if PG:
+        import psycopg2
+        return _PgConn(psycopg2.connect(DATABASE_URL))
     con = sqlite3.connect(DB, timeout=10)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON")
@@ -165,8 +266,12 @@ def init_db(path=None):
     global DB
     if path:
         DB = path
-    fresh = not os.path.exists(DB) or os.path.getsize(DB) == 0
-    con = connect()
+    if PG:
+        con = connect()
+        fresh = con.execute("SELECT to_regclass('public.ingredient')").fetchone()[0] is None
+    else:
+        fresh = not os.path.exists(DB) or os.path.getsize(DB) == 0   # check before connect creates it
+        con = connect()
     if fresh:
         con.executescript(SCHEMA)
         seed_catalogue(con)
@@ -245,7 +350,7 @@ def ensure_invites(con):
     INGREX_INVITES survive the free-tier's ephemeral DB (which resets per deploy)."""
     con.execute("""CREATE TABLE IF NOT EXISTS invite(
         code TEXT PRIMARY KEY, note TEXT, is_admin INTEGER DEFAULT 0,
-        revoked INTEGER DEFAULT 0, created TEXT)""")
+        revoked INTEGER DEFAULT 0, created TEXT, vendor_id INTEGER)""")
     con.execute("""CREATE TABLE IF NOT EXISTS profile(
         code TEXT PRIMARY KEY, name TEXT, company TEXT, role TEXT,
         gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT)""")
@@ -256,11 +361,11 @@ def ensure_invites(con):
     con.execute("""CREATE TABLE IF NOT EXISTS req_note(
         id INTEGER PRIMARY KEY, request_id INTEGER, author TEXT, company TEXT,
         note TEXT, created TEXT)""")
-    # invite.vendor_id links a supplier login to the vendor it manages
-    if "vendor_id" not in [r[1] for r in con.execute("PRAGMA table_info(invite)")]:
-        con.execute("ALTER TABLE invite ADD COLUMN vendor_id INTEGER")
-    if "blacklisted" not in [r[1] for r in con.execute("PRAGMA table_info(vendor)")]:
-        con.execute("ALTER TABLE vendor ADD COLUMN blacklisted INTEGER DEFAULT 0")
+    if not PG:   # SQLite: add columns to pre-existing local DBs (Postgres has them from CREATE)
+        if "vendor_id" not in [r[1] for r in con.execute("PRAGMA table_info(invite)")]:
+            con.execute("ALTER TABLE invite ADD COLUMN vendor_id INTEGER")
+        if "blacklisted" not in [r[1] for r in con.execute("PRAGMA table_info(vendor)")]:
+            con.execute("ALTER TABLE vendor ADD COLUMN blacklisted INTEGER DEFAULT 0")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:

@@ -2,12 +2,12 @@ services:
   - type: web
     name: ingrex
     runtime: python
-    plan: free                    # free tier: no persistent disk, sleeps when idle
-    buildCommand: "true"          # stdlib only, nothing to install
+    plan: free
+    buildCommand: pip install -r requirements.txt   # psycopg2 for Postgres
     startCommand: python3 ingrex.py
     envVars:
       - key: HOST
         value: 0.0.0.0
-    # ponytail: free tier has no disk, so DB lives on ephemeral storage.
-    # Ratings reset on every redeploy / sleep-wake. To persist: upgrade to a
-    # paid plan, add a disk mounted at /data, set DB=/data/ingrex.db.
+    # Durable data: set DATABASE_URL to your Supabase/Neon Postgres connection
+    # string (use the pooled connection). Also set INGREX_ADMIN_CODE and
+    # INGREX_SECRET. With DATABASE_URL unset the app falls back to ephemeral SQLite.
