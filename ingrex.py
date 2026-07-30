@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import html
 import http.server
+import json
 import os
 import random
 import re
@@ -324,6 +325,20 @@ p{margin:0 0 11px}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
   color:var(--acc-d);background:var(--acc-t);border:1px solid #d7e8df;
   padding:5px 11px;border-radius:20px;white-space:nowrap}
+.sgbox{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;z-index:40;padding:4px;
+  box-shadow:0 16px 40px -16px rgba(17,21,18,.3),0 2px 6px -3px rgba(17,21,18,.12);
+  opacity:0;transform:translateY(-8px) scale(.985);transform-origin:top;pointer-events:none;
+  transition:opacity .17s cubic-bezier(.2,.7,.2,1),transform .17s cubic-bezier(.2,.7,.2,1)}
+.sgbox.on{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+.sgi{display:flex;align-items:center;gap:10px;padding:8px 11px;color:var(--ink);
+  font-size:13px;border-radius:8px;text-decoration:none;transition:background .1s}
+.sgi:hover,.sgi.on{background:var(--acc-t)}
+.sgt{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--acc-d);background:var(--acc-t);padding:2px 6px;border-radius:5px;flex:none}
+.sgi.on .sgt,.sgi:hover .sgt{background:#fff}
+.sgl{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sgs{margin-left:auto;color:var(--mut);font-size:11.5px;flex:none;white-space:nowrap}
 .pulse{width:8px;height:8px;border-radius:50%;background:var(--acc);
   box-shadow:0 0 0 0 rgba(13,122,86,.5);animation:pulse 2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,122,86,.5)}
@@ -439,6 +454,9 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .xbtn:hover{background:#fbe9df}
 code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
   padding:2px 7px;border-radius:6px;color:var(--ink)}
+.envbox{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:8px;background:var(--line2);color:var(--ink);
+  resize:vertical;margin-top:4px}
 /* ingredient detail two-column: suppliers left, trend + facts right */
 .igrid{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start}
 .iside{position:sticky;top:66px}
@@ -680,9 +698,11 @@ def topbar(q=""):
         f"<div class=menu><div class=mhead>Activity</div>{feed}"
         f"<a class=mfoot href='/search'>View all ingredients →</a></div></details>")
     return (f"<div class=top>"
-            f"<form method=get action='/search'>"
+            f"<form method=get action='/search' autocomplete=off>"
             f"<svg viewBox='0 0 24 24'><circle cx=11 cy=11 r=7/><path d='M21 21l-4.3-4.3'/></svg>"
-            f"<input name=q value='{E(q)}' placeholder='Search ingredients, suppliers, CAS no., etc.'></form>"
+            f"<input id=topsearch name=q value='{E(q)}' autocomplete=off spellcheck=false "
+            f"placeholder='Search ingredients, suppliers, CAS no., etc.'>"
+            f"<div id=sgbox class=sgbox></div></form>"
             f"<span class=grow></span>"
             f"<span class=live title='Users active in the last 5 minutes'>"
             f"<span class=pulse></span>{online_count()} online</span>"
@@ -718,6 +738,31 @@ ch.addEventListener('pointerleave',function(){tip.style.opacity='0';
 guide.setAttribute('opacity','0');cur.setAttribute('opacity','0');});});
 </script>"""
 
+# Top-bar live search suggestions with fluid dropdown + keyboard nav.
+SEARCH_JS = """<script>
+(function(){var inp=document.getElementById('topsearch'),box=document.getElementById('sgbox');
+if(!inp||!box)return;var items=[],sel=-1,t;
+function esc(s){return (s||'').replace(/[&<>\\"]/g,function(c){
+return {'&':'&amp;','<':'&lt;','>':'&gt;','\\"':'&quot;'}[c];});}
+function hide(){box.classList.remove('on');sel=-1;}
+function render(){box.innerHTML=items.map(function(it,i){
+return '<a class=\\"sgi'+(i===sel?' on':'')+'\\" href=\\"'+it.h+'\\">'+
+'<span class=sgt>'+it.t+'</span><span class=sgl>'+esc(it.l)+'</span>'+
+'<span class=sgs>'+esc(it.s)+'</span></a>';}).join('');
+box.classList.toggle('on',items.length>0);}
+inp.addEventListener('input',function(){clearTimeout(t);var v=inp.value.trim();
+if(!v){items=[];hide();return;}
+t=setTimeout(function(){fetch('/suggest?q='+encodeURIComponent(v))
+.then(function(r){return r.json();}).then(function(d){items=d;sel=-1;render();})
+.catch(function(){});},110);});
+inp.addEventListener('keydown',function(e){if(!box.classList.contains('on'))return;
+if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,items.length-1);render();}
+else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);render();}
+else if(e.key==='Enter'&&sel>=0){e.preventDefault();location=items[sel].h;}
+else if(e.key==='Escape'){hide();}});
+document.addEventListener('click',function(e){if(!inp.parentNode.contains(e.target))hide();});})();
+</script>"""
+
 def page(title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -726,7 +771,7 @@ def page(title, body, active="dashboard", q=""):
             f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
-            f"</div></div>{NOTIF_JS}{TREND_JS}</html>").encode()
+            f"</div></div>{NOTIF_JS}{TREND_JS}{SEARCH_JS}</html>").encode()
 
 
 def stars(avg):
@@ -940,6 +985,24 @@ def search_ingredients(con, q="", kind="", doc="", maxp=None):
     return con.execute(sql, args).fetchall()
 
 
+def suggest(con, q):
+    """Top-bar autocomplete: ingredient + supplier near-matches."""
+    q = (q or "").strip()
+    if not q:
+        return []
+    like = f"%{q}%"
+    out = []
+    for r in con.execute("SELECT id,name,category FROM ingredient WHERE name LIKE ? "
+                         "ORDER BY (name LIKE ?) DESC, name LIMIT 6", (like, f"{q}%")):
+        out.append({"t": "Ingredient", "l": r["name"], "s": r["category"],
+                    "h": f"/ingredient/{r['id']}"})
+    for r in con.execute("SELECT id,name,state FROM vendor WHERE name LIKE ? "
+                         "ORDER BY (name LIKE ?) DESC, name LIMIT 4", (like, f"{q}%")):
+        out.append({"t": "Supplier", "l": r["name"], "s": r["state"] or "",
+                    "h": f"/vendor/{r['id']}"})
+    return out
+
+
 def vendor_rating(con, vendor_id):
     r = con.execute("SELECT AVG(score) a, COUNT(*) n FROM rating WHERE vendor_id=?",
                     (vendor_id,)).fetchone()
@@ -1132,6 +1195,9 @@ def view_admin(con):
 
     invites = con.execute(
         "SELECT * FROM invite ORDER BY is_admin DESC, revoked, created DESC").fetchall()
+    admin_code = next((iv["code"] for iv in invites if iv["is_admin"]), "")
+    env_invites = ",".join(f"{iv['code']}:{(iv['note'] or 'Invitee').replace(',', ' ')}"
+                           for iv in invites if not iv["is_admin"] and not iv["revoked"])
     inv_rows = ""
     for iv in invites:
         status = ("<span class='tag kind Trader'>admin</span>" if iv["is_admin"]
@@ -1167,6 +1233,18 @@ def view_admin(con):
         <div class=tablewrap><table>
           <thead><tr><th>Code / link</th><th>For</th><th>Status</th><th>Created</th><th></th></tr></thead>
           <tbody>{inv_rows}</tbody></table></div>
+      </div>
+      <div class='panel pad'>
+        <div class=ph><h3>Keep users across deploys</h3></div>
+        <div class=metaline style='margin:8px 0 14px'>Free hosting resets the database on every
+          deploy, so codes created here are temporary. Paste these into your host's
+          <b>Environment</b> and they'll be re-created on every restart — permanently.</div>
+        <label style='font-size:11px;font-weight:700;color:var(--mut)'>INGREX_ADMIN_CODE</label>
+        <textarea readonly onclick=this.select() class=envbox rows=1>{E(admin_code)}</textarea>
+        <label style='font-size:11px;font-weight:700;color:var(--mut);margin-top:10px;display:block'>INGREX_INVITES</label>
+        <textarea readonly onclick=this.select() class=envbox rows=2>{E(env_invites)}</textarea>
+        <div class=metaline style='margin-top:8px'>Also set <code class=inv>INGREX_SECRET</code>
+          to any long random string so logins survive restarts.</div>
       </div>"""
     return page("Admin", body, active="admin")
 
@@ -1769,6 +1847,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             touch_online(f"{ident['code'] if ident else 'anon'}|{self._client_ip()}",
                          ident["note"] if ident else "Guest", ident["code"] if ident else "",
                          self._client_ip(), is_admin())
+            if url.path == "/suggest":
+                body = json.dumps(suggest(con, params.get("q", [""])[0][:60])).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                return self.wfile.write(body)
             # onboarding: invited (non-admin) users must complete their profile first.
             # If a signed profile cookie survives a DB reset, restore it silently.
             if ident and not is_admin() and not profile_done(con, ident["code"]):
@@ -1907,6 +1992,10 @@ def demo():
     assert len(search_ingredients(con)) == n_ing
     assert len(search_ingredients(con, "whey")) >= 1
     assert search_ingredients(con, "zzzznotreal") == []
+    # autocomplete: near-matches across ingredients + suppliers, typed prefix ranked first
+    sg = suggest(con, "prot")
+    assert sg and all({"t", "l", "h"} <= set(s) for s in sg)
+    assert suggest(con, "") == []
     o = con.execute("SELECT price_min, price_max FROM offer LIMIT 1").fetchone()
     assert o["price_min"] < o["price_max"], "offer price is a range, not exact"
     assert parse_rate("₹8,500.00 ") == 8500.0 and parse_rate("") is None
