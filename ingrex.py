@@ -14,7 +14,7 @@ import sqlite3
 import sys
 import time
 import urllib.parse
-from datetime import date
+from datetime import date, datetime
 
 # Shared pilot gate. Set INGREX_PW in the host env to require a password to
 # enter the site. Unset/empty (local dev, tests) leaves the site open.
@@ -205,7 +205,7 @@ CSS = """
 :root{
   --ink:#0f1f1a;--body:#33443d;--mut:#6b7d75;--line:#e6ece8;--line2:#f0f4f1;
   --bg:#f4f7f5;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#e7f4ee;
-  --up:#c1531a;--down:#0d7a56;--gold:#d99a1c;
+  --sb:#111d18;--up:#c1531a;--down:#0d7a56;--gold:#d99a1c;
   --shadow:0 1px 2px rgba(15,31,26,.04),0 4px 16px -8px rgba(15,31,26,.10);
   --radius:14px;
 }
@@ -220,27 +220,104 @@ h2{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
   color:var(--mut);margin:34px 0 12px}
 p{margin:0 0 12px}
 
-/* header */
-header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.82);
-  backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:8px;padding:0 24px;height:60px}
-.brand{display:flex;align-items:baseline;gap:2px;font-size:21px;font-weight:800;
-  letter-spacing:-.03em;color:var(--ink);margin-right:20px}
-.brand span{color:var(--acc)}
-.brand small{margin-left:10px;font-size:11px;font-weight:600;letter-spacing:.04em;
-  color:var(--mut);align-self:center;text-transform:uppercase}
-nav{display:flex;gap:4px}
-nav a{padding:7px 13px;border-radius:8px;font-size:14px;font-weight:600;color:var(--body)}
-nav a:hover{background:var(--acc-t);color:var(--acc-d)}
-.spacer{flex:1}
-.pill-live{font-size:11px;font-weight:700;color:var(--acc);background:var(--acc-t);
-  padding:5px 11px;border-radius:20px;letter-spacing:.03em}
+/* app shell */
+.shell{display:flex;min-height:100vh}
+.side{width:250px;flex:none;position:sticky;top:0;height:100vh;overflow:auto;
+  background:var(--sb);color:#b7c6bf;display:flex;flex-direction:column;padding:20px 14px}
+.side .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 2px;color:#fff}
+.side .brand .mk{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  font-weight:800;font-size:18px;color:#fff;background:linear-gradient(135deg,#12b884,#0a5d41)}
+.side .brand .nm{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.side .brand .nm span{color:#4fe0a6}
+.side .brand small{display:block;font-size:10px;font-weight:600;color:#7f958c;letter-spacing:.02em}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:18px}
+.nav a,.nav span.item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;
+  font-size:14px;font-weight:600;color:#a9bcb3;cursor:pointer}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.on{background:var(--acc);color:#fff}
+.nav a.on svg{stroke:#fff}
+.nav svg{width:18px;height:18px;stroke:#8fa39b;stroke-width:1.9;fill:none;flex:none}
+.nav .soon{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.06em;color:#5f746b;
+  border:1px solid rgba(255,255,255,.12);padding:2px 6px;border-radius:20px}
+.nav span.item{color:#6f847b;cursor:default}
+.grow{flex:1}
+.upsell{margin:14px 4px;padding:16px;border-radius:14px;
+  background:linear-gradient(150deg,rgba(18,184,132,.22),rgba(106,88,196,.18));
+  border:1px solid rgba(255,255,255,.1)}
+.upsell b{color:#fff;font-size:14px}
+.upsell p{color:#9fb3aa;font-size:12px;margin:6px 0 12px;line-height:1.45}
+.upsell a{display:block;text-align:center;background:var(--acc);color:#fff;font-weight:700;
+  font-size:13px;padding:10px;border-radius:10px}
+.me{display:flex;align-items:center;gap:10px;padding:12px 6px 2px;border-top:1px solid rgba(255,255,255,.08)}
+.av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-weight:700;font-size:13px;color:#fff;background:linear-gradient(135deg,#3a4a44,#1c2622)}
+.me .nm{color:#fff;font-size:13px;font-weight:700}
+.me .rl{color:#7f958c;font-size:11px}
 
-/* layout */
-main{max-width:1120px;margin:0 auto;padding:30px 24px 60px}
+.content{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;
+  padding:12px 26px;background:rgba(244,247,245,.86);backdrop-filter:saturate(180%) blur(10px);
+  border-bottom:1px solid var(--line)}
+.top form{flex:1;max-width:660px;position:relative}
+.top form svg{position:absolute;left:15px;top:50%;transform:translateY(-50%);
+  width:17px;height:17px;stroke:#9fb0a8;stroke-width:2;fill:none}
+.top input{width:100%;padding:11px 14px 11px 42px;border-radius:11px;font-size:14px;
+  border:1px solid var(--line);background:#fff}
+.top .ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+  background:#fff;border:1px solid var(--line);position:relative;color:var(--mut)}
+.top .ico .dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;
+  border-radius:20px;background:var(--acc);color:#fff;font-size:10px;font-weight:700;
+  display:grid;place-items:center}
+.wrap{padding:26px 28px 60px;max-width:1200px;width:100%}
 .lead{color:var(--mut);font-size:15px;max-width:60ch;margin:-2px 0 22px}
 .back{display:inline-block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:14px}
 .back:hover{color:var(--acc)}
+
+/* dashboard */
+.hi h1{font-size:26px;margin:0 0 4px}
+.hi .sub{color:var(--mut);margin-bottom:22px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px 20px;
+  box-shadow:var(--shadow)}
+.stat .l{color:var(--mut);font-size:13px;font-weight:600}
+.stat .v{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin:8px 0 6px}
+.stat .d{font-size:12px;color:var(--mut)}.stat .d b{color:var(--acc);font-weight:700}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px 22px 6px;
+  box-shadow:var(--shadow);margin-bottom:18px}
+.panel.pad{padding:22px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.ph h3{font-size:17px;font-weight:700;color:var(--ink);margin:0}
+.ph a{font-size:13px;font-weight:600}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 18px}
+.pill{padding:8px 15px;border-radius:20px;border:1px solid var(--line);background:#fff;
+  font-size:13px;font-weight:600;color:var(--body);cursor:pointer}
+.pill:hover{border-color:#cfe0d7;color:var(--acc-d)}
+.pill.on{background:var(--acc);color:#fff;border-color:transparent}
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px}
+a.icard{display:block;border:1px solid var(--line);border-radius:14px;padding:13px;color:inherit;
+  background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
+a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
+  box-shadow:0 12px 26px -14px rgba(15,31,26,.25)}
+.icard .mono{height:92px;border-radius:11px;display:grid;place-items:center;margin-bottom:12px;
+  font-size:28px;font-weight:800;color:#fff;letter-spacing:.02em}
+.icard .nm{font-size:14px;font-weight:700;color:var(--ink);line-height:1.3}
+.icard .ct{color:var(--mut);font-size:12px;margin-top:2px}
+.icard .pr{font-size:15px;font-weight:800;color:var(--ink);margin-top:9px}
+.icard .pr .unit{font-size:12px;font-weight:500;color:var(--mut)}
+.duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
+.chartbox{margin-top:14px}
+.chartbox svg{width:100%;height:auto;display:block}
+.axl{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif}
+.sup{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+.sup:last-child{border-bottom:0}
+.sup .av{background:linear-gradient(135deg,#0d7a56,#12b884)}
+.sup .nm{font-size:14px;font-weight:700;color:var(--ink)}
+.sup .lc{color:var(--mut);font-size:12px}
+.sup .rt{margin-left:auto;text-align:right}
+.sup .rt .s{font-weight:700;color:var(--ink);font-size:14px}
+.sup .rt .n{color:var(--mut);font-size:11px}
+.sup .btn{margin-left:12px;font-size:12px;font-weight:700;color:var(--acc-d);
+  border:1px solid var(--line);padding:7px 13px;border-radius:9px}
 
 /* cards */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
@@ -302,30 +379,85 @@ button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
 .empty{color:var(--mut);padding:26px 0;text-align:center}
 .count{color:var(--mut);font-weight:600;font-size:13px}
 
-footer{max-width:1120px;margin:0 auto;padding:24px;color:var(--mut);font-size:12px;
-  border-top:1px solid var(--line);margin-top:20px}
+footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid var(--line)}
 
-@media(max-width:560px){
-  main{padding:22px 16px 48px}header{padding:0 16px}
-  h1{font-size:23px}.brand small{display:none}
+@media(max-width:960px){
+  .stats{grid-template-columns:repeat(2,1fr)}.duo{grid-template-columns:1fr}
+  .side{width:200px}
 }
-"""
+@media(max-width:720px){
+  .shell{flex-direction:column}
+  .side{position:static;width:100%;height:auto;flex-direction:row;flex-wrap:wrap;
+    align-items:center;gap:6px;padding:12px}
+  .side .grow,.upsell,.me,.side .brand small{display:none}
+  .nav{flex-direction:row;flex-wrap:wrap;margin:0}
+  .nav .soon{display:none}
+  .top{padding:12px 16px}.wrap{padding:20px 16px 48px}
+  .stats{grid-template-columns:1fr 1fr}.hi h1{font-size:22px}
+}"""
 
 E = html.escape
 
 
-def page(title, body):
+# nav: label, href, active-key, svg-path (24x24), optional 'soon'
+NAV = [
+    ("Dashboard", "/", "dashboard", "M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z"),
+    ("Search Ingredients", "/search", "search", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"),
+    ("Suppliers", "/vendors", "suppliers", "M3 21V8l9-5 9 5v13M9 21v-6h6v6"),
+    ("Market Insights", None, "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
+    ("My Reviews", None, "reviews", "M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.6 9.8l6.5-.9z"),
+    ("Documents", None, "docs", "M14 3H6v18h12V7zM14 3v4h4"),
+    ("Watchlist", None, "watch", "M20.8 6a5.5 5.5 0 0 0-9-1.7L12 5l.2-.7A5.5 5.5 0 1 0 4 12l8 8 8-8a5.5 5.5 0 0 0 .8-6z"),
+]
+
+
+def icon(path):
+    return f"<svg viewBox='0 0 24 24' stroke-linecap='round' stroke-linejoin='round'><path d='{path}'/></svg>"
+
+
+def sidebar(active):
+    items = ""
+    for label, href, key, path in NAV:
+        on = " on" if key == active else ""
+        if href:
+            items += f"<a class='{on.strip()}' href='{href}'>{icon(path)}{label}</a>"
+        else:
+            items += f"<span class=item>{icon(path)}{label}<span class=soon>SOON</span></span>"
+    return (f"<aside class=side>"
+            f"<a class=brand href='/'><span class=mk>i</span>"
+            f"<span class=nm>ingre<span>x</span>"
+            f"<small>Ingredients. Sourced better.</small></span></a>"
+            f"<nav class=nav>{items}</nav><div class=grow></div>"
+            f"<div class=upsell><b>Pilot preview</b>"
+            f"<p>Price history, analytics & verified supplier insights are on the roadmap.</p>"
+            f"<a href='/'>Explore catalogue</a></div>"
+            f"<div class=me><span class=av>SL</span>"
+            f"<span><span class=nm>Sapiens Labs</span><br>"
+            f"<span class=rl>Purchase Manager</span></span></div></aside>")
+
+
+def topbar(q=""):
+    return (f"<div class=top>"
+            f"<form method=get action='/search'>"
+            f"<svg viewBox='0 0 24 24'><circle cx=11 cy=11 r=7/><path d='M21 21l-4.3-4.3'/></svg>"
+            f"<input name=q value='{E(q)}' placeholder='Search ingredients, suppliers, CAS no., etc.'></form>"
+            f"<span class=grow></span>"
+            f"<div class=ico title=Notifications>"
+            f"<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2>"
+            f"<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4'/></svg>"
+            f"<span class=dot>12</span></div>"
+            f"<span class=av>SL</span></div>")
+
+
+def page(title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{E(title)} · Ingrex</title><style>{CSS}</style>"
-            f"<header><a class=brand href='/'>ingre<span>x</span>"
-            f"<small>Nutraceutical sourcing</small></a>"
-            f"<nav><a href='/'>Ingredients</a><a href='/vendors'>Vendors</a></nav>"
-            f"<span class=spacer></span><span class=pill-live>Pilot</span></header>"
-            f"<main>{body}</main>"
+            f"<div class=shell>{sidebar(active)}"
+            f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
-            f"</html>").encode()
+            f"</div></div></html>").encode()
 
 
 def stars(avg):
@@ -358,6 +490,73 @@ def sparkline(points, w=180, h=40):
 def doc_tags(docs):
     return "".join(f"<span class=tag>{E(d)}</span>" for d in docs.split(",") if d) \
         or "<span class=mut>none listed</span>"
+
+
+MONO = ["#0d7a56", "#6a58c4", "#c47f1c", "#2f7cc4", "#b5486e", "#3f8a1c", "#0e8a8a"]
+MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def greeting():
+    h = datetime.now().hour
+    return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
+
+
+def mono(name):
+    """Colour + 2-letter monogram, replacing the ingredient photo."""
+    words = [w for w in re.split(r"[^A-Za-z0-9]+", name) if w]
+    ini = (words[0][:2] if len(words) == 1 else words[0][0] + words[1][0]).upper()
+    grad = MONO[sum(map(ord, name)) % len(MONO)]
+    return grad, ini
+
+
+def icard(r):
+    grad, ini = mono(r["name"])
+    price = (f"₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
+             if r["lo"] else "<span class=mut>No offers</span>")
+    return (f"<a class=icard href='/ingredient/{r['id']}'>"
+            f"<div class=mono style='background:linear-gradient(135deg,{grad},{grad}cc)'>{ini}</div>"
+            f"<div class=nm>{E(r['name'])}</div>"
+            f"<div class=ct>{E(r['category'])}</div>"
+            f"<div class=pr>{price}</div>"
+            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s)</div></a>")
+
+
+def price_chart(points, w=560, h=210):
+    """Line chart with y gridlines + month labels for the market-trend panel."""
+    vals = [p for _, p in points]
+    if len(vals) < 2:
+        return "<p class=empty>No price history.</p>"
+    lo, hi = min(vals), max(vals)
+    pad = (hi - lo) * 0.18 or hi * 0.1 or 1
+    lo, hi = lo - pad, hi + pad
+    rng = hi - lo or 1
+    pl, pr, pt, pb = 52, 12, 14, 26
+    iw, ih, n = w - pl - pr, h - pt - pb, len(vals)
+    xs = [pl + iw * i / (n - 1) for i in range(n)]
+    ys = [pt + ih * (1 - (v - lo) / rng) for v in vals]
+    grid = ""
+    for g in range(4):
+        gy = pt + ih * g / 3
+        grid += (f"<line x1={pl} y1={gy:.1f} x2={w - pr} y2={gy:.1f} stroke='var(--line)'/>"
+                 f"<text x={pl - 8} y={gy + 4:.1f} text-anchor=end class=axl>"
+                 f"{hi - rng * g / 3:,.0f}</text>")
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    area = f"{pl},{pt + ih} {line} {w - pr},{pt + ih}"
+    dots = "".join(f"<circle cx={x:.1f} cy={y:.1f} r=3 fill='var(--acc)'/>"
+                   for x, y in zip(xs, ys))
+    step = max(1, n // 6)
+    xl = "".join(
+        f"<text x={xs[i]:.1f} y={h - 8} text-anchor=middle class=axl>"
+        f"{MON_ABBR[int(m.split('-')[1])]}</text>"
+        for i, (m, _) in enumerate(points) if i % step == 0 or i == n - 1)
+    return (f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
+            f"<defs><linearGradient id=g x1=0 y1=0 x2=0 y2=1>"
+            f"<stop offset=0 stop-color='var(--acc)' stop-opacity=.18/>"
+            f"<stop offset=1 stop-color='var(--acc)' stop-opacity=0/></linearGradient></defs>"
+            f"{grid}<polygon points='{area}' fill='url(#g)'/>"
+            f"<polyline points='{line}' fill=none stroke='var(--acc)' stroke-width=2 "
+            f"stroke-linejoin=round stroke-linecap=round/>{dots}{xl}</svg>")
 
 
 # ---------- queries ----------
@@ -404,7 +603,85 @@ def offers_for_ingredient(con, ing_id):
 
 # ---------- views ----------
 
-def view_home(con, params):
+def category_pills(con, active=""):
+    cats = [r["category"] for r in con.execute(
+        "SELECT category, COUNT(*) c FROM ingredient GROUP BY category ORDER BY c DESC")]
+    pills = f"<a class='pill{"" if active else " on"}' href='/search'>Popular</a>"
+    for c in cats:
+        on = " on" if c == active else ""
+        pills += f"<a class='pill{on}' href='/search?q={urllib.parse.quote(c)}'>{E(c)}</a>"
+    return f"<div class=pills>{pills}</div>"
+
+
+def stat_cards(con):
+    ing = con.execute("SELECT COUNT(*) n FROM ingredient").fetchone()["n"]
+    ven = con.execute(
+        "SELECT COUNT(*) n, SUM(kind='Manufacturer') m FROM vendor").fetchone()
+    rat = con.execute("SELECT AVG(score) a, COUNT(*) n FROM rating").fetchone()
+    pts = con.execute("SELECT COUNT(*) n FROM price_point").fetchone()["n"]
+    avg = f"{rat['a']:.1f} ★" if rat["a"] else "—"
+    return f"""<div class=stats>
+      <div class=stat><div class=l>Ingredients tracked</div><div class=v>{ing}</div>
+        <div class=d>across the catalogue</div></div>
+      <div class=stat><div class=l>Suppliers</div><div class=v>{ven['n']}</div>
+        <div class=d><b>{ven['m']}</b> manufacturers · rest traders/importers</div></div>
+      <div class=stat><div class=l>Avg supplier rating</div><div class=v>{avg}</div>
+        <div class=d>from <b>{rat['n']}</b> reviews</div></div>
+      <div class=stat><div class=l>Market data points</div><div class=v>{pts}</div>
+        <div class=d>12-month price history</div></div></div>"""
+
+
+def top_suppliers(con, limit=3):
+    rows = con.execute("""
+        SELECT v.id, v.name, v.city, v.country, v.kind,
+               (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) a,
+               (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n
+        FROM vendor v WHERE (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) > 0
+        ORDER BY a DESC LIMIT ?""", (limit,)).fetchall()
+    out = ""
+    for v in rows:
+        _, ini = mono(v["name"])
+        out += (f"<div class=sup><span class=av>{ini}</span>"
+                f"<span><span class=nm>{E(v['name'])}</span><br>"
+                f"<span class=lc>{E(v['city'])}, {E(v['country'])}</span></span>"
+                f"<span class=rt><span class=s>★ {v['a']:.1f}</span><br>"
+                f"<span class=n>{v['n']} review(s)</span></span>"
+                f"<a class=btn href='/vendor/{v['id']}'>View</a></div>")
+    return out or "<p class=empty>No rated suppliers yet.</p>"
+
+
+def view_dashboard(con):
+    rows = search_ingredients(con)
+    feat = max(rows, key=lambda r: r["vendors"] or 0)
+    trend = con.execute(
+        "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
+        (feat["id"],)).fetchall()
+    body = f"""
+      <div class=hi><h1>{greeting()}, Karan 👋</h1>
+        <div class=sub>Here's what's happening with your sourcing today.</div></div>
+      {stat_cards(con)}
+      <div class='panel pad'>
+        <div class=ph><h3>Find ingredients. Compare. Source smart.</h3>
+          <a href='/search'>View all →</a></div>
+        {category_pills(con)}
+        <div class=icards>{"".join(icard(r) for r in rows[:10])}</div>
+      </div>
+      <div class=duo>
+        <div class='panel pad'>
+          <div class=ph><h3>Price trend</h3>
+            <a href='/ingredient/{feat['id']}'>Details →</a></div>
+          <div class=metaline>{E(feat['name'])} · monthly avg ₹/{E(feat['unit'])}</div>
+          <div class=chartbox>{price_chart([(m['month'], m['price']) for m in trend])}</div>
+        </div>
+        <div class='panel pad'>
+          <div class=ph><h3>Top rated suppliers</h3><a href='/vendors'>View all →</a></div>
+          {top_suppliers(con)}
+        </div>
+      </div>"""
+    return page("Dashboard", body, active="dashboard")
+
+
+def view_search(con, params):
     q = params.get("q", [""])[0].strip()
     kind = params.get("kind", [""])[0]
     doc = params.get("doc", [""])[0]
@@ -416,42 +693,25 @@ def view_home(con, params):
         doc = ""
 
     rows = search_ingredients(con, q, kind, doc, maxp)
+    cats = {r["category"] for r in con.execute("SELECT DISTINCT category FROM ingredient")}
     opts = lambda vals, sel, label: (
         f"<option value=''>{label}</option>" +
         "".join(f"<option{' selected' if v == sel else ''}>{E(v)}</option>" for v in vals))
 
-    cards = []
-    for r in rows:
-        trend = con.execute(
-            "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
-            (r["id"],)).fetchall()
-        price = (f"<span class=price>₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}"
-                 f"<span class=unit> /{E(r['unit'])}</span></span>"
-                 if r["lo"] else "<span class=mut>No offers yet</span>")
-        funcs = "".join(f"<span class='tag func'>{E(f.strip())}</span>"
-                        for f in r['functions'].split(','))
-        cards.append(f"""<a class=tile href='/ingredient/{r['id']}'>
-          <div class=ttl>{E(r['name'])}</div>
-          <div class=metaline>{E(r['category'])} · CAS {E(r['cas'])}</div>
-          <div style='margin:12px 0 4px'>{price}</div>
-          <div class=count>{r['vendors']} vendor(s)</div>
-          <div class=chips style='margin:10px 0'>{funcs}</div>
-          <div>{sparkline([(m['month'], m['price']) for m in trend])}</div>
-        </a>""")
-
-    return page("Ingredients", f"""
-      <h1>Ingredient directory</h1>
-      <p class=lead>Search the nutraceutical ingredient catalogue — compare vendor price
-         bands, available documents, supplier type and market trend in one view.</p>
-      <div class=card><form class=filters method=get action='/'>
-        <input type=search name=q placeholder='Search ingredient, CAS, function…' value='{E(q)}'>
+    body = f"""
+      <div class=hi><h1>Search ingredients</h1>
+        <div class=sub>Compare vendor price bands, documents, supplier type and market trend.</div></div>
+      {category_pills(con, q if q in cats else "")}
+      <div class='panel pad'><form class=filters method=get action='/search'>
+        <input type=search name=q placeholder='Ingredient, CAS, function…' value='{E(q)}'>
         <select name=kind>{opts(VENDOR_KINDS, kind, 'Any vendor type')}</select>
         <select name=doc>{opts(DOC_TYPES, doc, 'Any document')}</select>
-        <input name=maxp inputmode=decimal placeholder='Max ₹/unit' value='{E(raw)}' style='width:140px'>
+        <input name=maxp inputmode=decimal placeholder='Max ₹/unit' value='{E(raw)}' style='width:150px'>
         <button>Search</button>
       </form></div>
       <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
-      <div class=grid>{"".join(cards) or "<p class=empty>Nothing matched those filters.</p>"}</div>""")
+      <div class=icards>{"".join(icard(r) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
+    return page("Search", body, active="search", q=q)
 
 
 def view_ingredient(con, ing_id):
@@ -490,7 +750,7 @@ def view_ingredient(con, ing_id):
         <thead><tr><th>Vendor</th><th>Type</th><th>Price range</th><th>MOQ</th>
             <th>Lead</th><th>Rating</th><th>Documents</th></tr></thead>
         <tbody>{rows or "<tr><td colspan=7 class=empty>No vendors listed yet.</td></tr>"}</tbody>
-      </table></div>""")
+      </table></div>""", active="search")
 
 
 def view_vendors(con):
@@ -510,7 +770,7 @@ def view_vendors(con):
       <h1>Vendors</h1>
       <p class=lead>Manufacturers, traders and importers on the platform — ranked by
          client and manufacturer ratings.</p>
-      <div class=grid>{cards}</div>""")
+      <div class=grid>{cards}</div>""", active="suppliers")
 
 
 def view_vendor(con, vid, msg=""):
@@ -565,7 +825,7 @@ def view_vendor(con, vid, msg=""):
           <input name=note placeholder='Quality, docs, lead time…' maxlength=500 style='flex:1'>
           <button>Submit rating</button>
         </form></div>
-      <h2>Reviews</h2>{revs}""")
+      <h2>Reviews</h2>{revs}""", active="suppliers")
 
 
 def post_rate(con, body):
@@ -729,7 +989,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         con = connect()
         try:
             if url.path == "/":
-                out = view_home(con, params)
+                out = view_dashboard(con)
+            elif url.path == "/search":
+                out = view_search(con, params)
             elif url.path == "/vendors":
                 out = view_vendors(con)
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
@@ -819,7 +1081,9 @@ def demo():
     for v in range(1, len(SEED_VENDORS) + 1):
         assert view_vendor(con, v)
     assert view_ingredient(con, 9999) is None and view_vendor(con, 9999) is None
-    assert view_home(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
+    assert view_dashboard(con)
+    assert view_search(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
+    assert b"Good " in view_dashboard(con) and b"stat" in view_dashboard(con)
     assert view_vendors(con)
 
     # auth gate: token unforgeable, cookie round-trips, gate off when no pw
