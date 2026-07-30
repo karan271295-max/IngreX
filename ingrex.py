@@ -252,6 +252,12 @@ def ensure_invites(con):
         id INTEGER PRIMARY KEY, code TEXT, requester TEXT, company TEXT,
         ingredient TEXT NOT NULL, details TEXT, status TEXT DEFAULT 'Open',
         reply TEXT, created TEXT, updated TEXT)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS req_note(
+        id INTEGER PRIMARY KEY, request_id INTEGER, author TEXT, company TEXT,
+        note TEXT, created TEXT)""")
+    # invite.vendor_id links a supplier login to the vendor it manages
+    if "vendor_id" not in [r[1] for r in con.execute("PRAGMA table_info(invite)")]:
+        con.execute("ALTER TABLE invite ADD COLUMN vendor_id INTEGER")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
@@ -547,6 +553,7 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 .chartbox{margin-top:14px}
 .chartbox svg{width:100%;height:auto;display:block}
 .axl{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif}
+.axl-x{fill:var(--body);font-size:11.5px;font-weight:600;font-family:system-ui,sans-serif}
 .tchart{position:relative}
 .tchart svg{width:100%;height:auto;display:block}
 .thit{cursor:crosshair}.tcursor{pointer-events:none}
@@ -629,6 +636,23 @@ button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
 .st-closed{background:var(--line2);color:var(--mut)}
 .rreply{margin-top:8px;padding:9px 12px;background:var(--acc-t);border-radius:9px;
   font-size:12.5px;color:var(--ink)}.rreply b{color:var(--acc-d)}
+.leads{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.lead{font-size:12.5px;color:var(--body);background:var(--line2);border-radius:8px;padding:7px 10px}
+.lead b{color:var(--ink)}
+/* community ticker */
+.ticker{display:flex;align-items:center;gap:12px;background:var(--sb);color:#fff;
+  border-radius:12px;padding:0 14px;height:40px;overflow:hidden;margin-bottom:16px}
+.ticker-label{flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:#4fe0a6;background:rgba(79,224,166,.14);padding:4px 9px;border-radius:20px}
+.ticker-track{flex:1;overflow:hidden;position:relative;height:100%}
+.ticker-run{display:flex;gap:34px;align-items:center;height:100%;width:max-content;
+  animation:tick 40s linear infinite}
+.ticker:hover .ticker-run{animation-play-state:paused}
+.ticker-run a{color:rgba(255,255,255,.85);font-size:13px;white-space:nowrap;flex:none}
+.ticker-run a b{color:#fff}.ticker-run a span{color:rgba(255,255,255,.5)}
+.ticker-cta{flex:none;font-size:12px;font-weight:700;color:#4fe0a6}
+@keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.ticker-run{animation:none}}
 .empty{color:var(--mut);padding:26px 0;text-align:center}
 .count{color:var(--mut);font-weight:600;font-size:13px}
 .cline{display:flex;gap:14px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:14px}
@@ -680,10 +704,22 @@ def icon(path):
 
 
 def sidebar(active):
-    nav_items = list(NAV)
-    if is_admin():
-        nav_items.append(("Admin", "/admin", "admin",
-                          "M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"))
+    if is_supplier():
+        # suppliers get a focused nav: manage their own listing + market view
+        nav_items = [
+            ("My listing", f"/vendor/{supplier_vid()}", "suppliers",
+             "M3 21V8l9-5 9 5v13M9 21v-6h6v6"),
+            ("Market Insights", "/insights", "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
+            ("Sourcing Requests", "/requests", "requests",
+             "M9 12h6M9 16h6M9 8h6M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"),
+        ]
+        active_map = {"suppliers": "suppliers", "insights": "insights", "requests": "requests"}
+        active = active_map.get(active, "suppliers" if active in ("search", "dashboard") else active)
+    else:
+        nav_items = list(NAV)
+        if is_admin():
+            nav_items.append(("Admin", "/admin", "admin",
+                              "M12 2l7 4v6c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"))
     lis = "<li class=nav-title>Platform</li>"
     for label, href, key, path in nav_items:
         badge = ("<span class='nav-badge new'>NEW</span>" if key == "watch" else "")
@@ -974,11 +1010,15 @@ def price_chart(points, w=620, h=220):
         hits += (f"<rect class=thit x={x - iw / (n - 1) / 2:.1f} y={pt} "
                  f"width={iw / (n - 1):.1f} height={ih} fill=transparent "
                  f"data-x='{x:.1f}' data-y='{y:.1f}' data-m='{E(label)}' data-v='₹{v:,.0f}'/>")
-    step = max(1, n // 6)
-    xl = "".join(
-        f"<text x={xs[i]:.1f} y={h - 8} text-anchor=middle class=axl>"
-        f"{MON_ABBR[int(m.split('-')[1])]}</text>"
-        for i, (m, _) in enumerate(points) if i % step == 0 or i == n - 1)
+    step = max(1, n // 5)
+    xl = "<line x1={} y1={} x2={} y2={} stroke='var(--line)'/>".format(
+        pl, pt + ih, w - pr, pt + ih)
+    for i, (m, _) in enumerate(points):
+        if not (i % step == 0 or i == n - 1):
+            continue
+        yr, mm = m.split("-")
+        lab = MON_ABBR[int(mm)] + (f" '{yr[2:]}" if i in (0, n - 1) else "")
+        xl += (f"<text x={xs[i]:.1f} y={h - 7} text-anchor=middle class=axl-x>{lab}</text>")
     gid = f"g{points[0][0]}{n}"
     return (f"<div class=tchart>"
             f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
@@ -1132,6 +1172,7 @@ def view_dashboard(con, wl=frozenset(), trend_sel=""):
     ident = current()
     who = ident["note"].split()[0] if ident and ident["note"] else "there"
     body = f"""
+      {ticker(con)}
       <div class=hi><h1>{greeting()}, {E(who)} 👋</h1>
         <div class=sub>Here's what's happening with your sourcing today.</div></div>
       {stat_cards(con)}
@@ -1359,23 +1400,52 @@ def requester_identity(con):
     return code, name, company
 
 
+def ticker(con):
+    """Scrolling community ticker of open sourcing requests, shown app-wide."""
+    reqs = con.execute("SELECT id,ingredient,company FROM request "
+                       "WHERE status!='Closed' ORDER BY id DESC LIMIT 20").fetchall()
+    if not reqs:
+        return ""
+    items = "".join(
+        f"<a href='/requests#r{r['id']}'>◎ <b>{E(r['ingredient'])}</b>"
+        f"<span> — {E(r['company'] or 'a buyer')} is sourcing</span></a>" for r in reqs)
+    return (f"<div class=ticker><span class=ticker-label>Community sourcing</span>"
+            f"<div class=ticker-track><div class=ticker-run>{items}{items}</div></div>"
+            f"<a class=ticker-cta href='/requests'>Contribute →</a></div>")
+
+
+def req_card(con, r, code, name):
+    leads = con.execute("SELECT * FROM req_note WHERE request_id=? ORDER BY id", (r["id"],)).fetchall()
+    def lead_line(l):
+        co = f" · {E(l['company'])}" if l["company"] else ""
+        return (f"<div class=lead><b>{E(l['author'])}</b>{co}: {E(l['note'])}"
+                f"<span class=count> · {E(l['created'] or '')}</span></div>")
+    lead_html = "".join(lead_line(l) for l in leads)
+    mine = " <span class='tag func'>your request</span>" if (r["code"] == code or r["requester"] == name) else ""
+    reply = f"<div class=rreply><b>Purchase team:</b> {E(r['reply'])}</div>" if r["reply"] else ""
+    return f"""<div class=review id=r{r['id']}>
+      <div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'>
+        <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}{mine}</div>
+      <div class=metaline style='margin-top:4px'>{E(r['requester'] or 'A buyer')}
+        {f"· {E(r['company'])}" if r['company'] else ''} · raised {E(r['created'] or '')}</div>
+      {f"<div class=metaline style='margin-top:6px;color:var(--ink)'>{E(r['details'])}</div>" if r['details'] else ""}
+      {reply}
+      <div class=leads>{lead_html or "<div class=metaline>No community leads yet — know a supplier? Add one.</div>"}</div>
+      <form method=post action='/request_note' class=filters style='margin-top:8px'>
+        <input type=hidden name=id value='{r['id']}'>
+        <input name=note required maxlength=400 placeholder='Know a supplier for this? Add a lead…' style='flex:1'>
+        <button>Add lead</button></form></div>"""
+
+
 def view_requests(con, prefill="", msg=""):
     code, name, company = requester_identity(con)
-    mine = con.execute(
-        "SELECT * FROM request WHERE code=? OR requester=? ORDER BY id DESC",
-        (code, name)).fetchall()
-    rows = "".join(
-        f"""<div class=review>
-          <div style='display:flex;align-items:center;gap:10px'>
-            <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}</div>
-          {f"<div class=metaline style='margin-top:6px'>{E(r['details'])}</div>" if r['details'] else ""}
-          {f"<div class=rreply><b>Purchase team:</b> {E(r['reply'])}</div>" if r['reply'] else ""}
-          <div class=count style='margin-top:6px'>Raised {E(r['created'] or '')}</div></div>"""
-        for r in mine)
+    active = con.execute("SELECT * FROM request WHERE status!='Closed' "
+                         "ORDER BY (status='Open') DESC, id DESC").fetchall()
+    board = "".join(req_card(con, r, code, name) for r in active)
     body = f"""
       <div class=hi><h1>Sourcing requests</h1>
-        <div class=sub>Can't find an ingredient on Ingrex? Raise a request — our purchase team
-          sources a supplier, has them submit a quote, and updates you here.</div></div>
+        <div class=sub>Can't find an ingredient? Raise a request — the purchase team sources a
+          supplier, and the whole community can chip in with leads.</div></div>
       <div class='panel pad' style='margin-bottom:16px'>
         {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
         <form method=post action='/requests'>
@@ -1393,8 +1463,8 @@ def view_requests(con, prefill="", msg=""):
         <div class=metaline style='margin-top:10px'>Raising as
           <b style='color:var(--ink)'>{E(name)}{f' · {E(company)}' if company else ''}</b>.</div>
       </div>
-      <h2>Your requests ({len(mine)})</h2>
-      {rows or "<div class='panel pad'><p class=empty>No requests yet.</p></div>"}"""
+      <h2>Community board ({len(active)} open)</h2>
+      {board or "<div class='panel pad'><p class=empty>No open requests. Raise one above.</p></div>"}"""
     return page("Sourcing requests", body, active="requests")
 
 
@@ -1621,17 +1691,23 @@ def view_vendor(con, vid, msg=""):
         WHERE o.vendor_id=? ORDER BY i.name""", (vid,)).fetchall()
     reviews = con.execute(
         "SELECT * FROM rating WHERE vendor_id=? ORDER BY id DESC", (vid,)).fetchall()
-    admin = is_admin() or not gate_active(con)
+    owner = can_edit_vendor(con, vid)           # admin, or the supplier who owns this listing
+    admin_only = is_admin() or not gate_active(con)
+    own_supplier = supplier_vid() == vid
 
     def item_row(o):
         others = (f"<a href='/ingredient/{o['iid']}'>{o['others']} other supplier"
                   f"{'' if o['others'] == 1 else 's'}</a>" if o["others"] else "<span class=metaline>only here</span>")
         market = f"₹{o['mlo']:,.0f}–{o['mhi']:,.0f}" if o["mlo"] else "—"
+        rem = (f"<td><form method=post action='/admin/offer/del' style='margin:0'>"
+               f"<input type=hidden name=id value='{o['id']}'>"
+               f"<input type=hidden name=vendor_id value='{vid}'>"
+               f"<button class=xbtn>Remove</button></form></td>" if owner else "")
         return (f"<tr><td><a href='/ingredient/{o['iid']}'><b>{E(o['iname'])}</b></a>"
                 f"<div class=metaline>{E(o['category'])}</div></td>"
                 f"<td><span class=price style='font-size:14px'>₹{o['price_min']:,.0f}–{o['price_max']:,.0f}</span>"
                 f"<div class=metaline>/{E(o['unit'])}</div></td>"
-                f"<td>{others}</td><td class=metaline>{market}</td></tr>")
+                f"<td>{others}</td><td class=metaline>{market}</td>{rem}</tr>")
     items = "".join(item_row(o) for o in offers)
 
     revs = "".join(f"""<div class=review>
@@ -1684,23 +1760,43 @@ def view_vendor(con, vid, msg=""):
             <label class=full>Address<input name=address maxlength=200 value='{E(vk('address'))}'></label>
           </div>
           <button style='margin-top:14px'>Save changes</button></form>
-      </details>""" if admin else "")
+      </details>""" if owner else "")
     add_ing = (f"""
-      <details class='panel pad addsup' style='margin:0 0 8px'>
-        <summary>+ Add an ingredient this supplier offers</summary>
+      <details class='panel pad addsup' style='margin:0 0 8px'{' open' if own_supplier and not offers else ''}>
+        <summary>+ Add an ingredient {'you offer' if own_supplier else 'this supplier offers'}</summary>
         <form method=post action='/admin/offer' class=filters style='margin-top:14px'>
           <input type=hidden name=vendor_id value='{vid}'>
           <input name=ingredient required maxlength=140 placeholder='Ingredient name' style='flex:1'>
           <input name=rate required inputmode=decimal placeholder='Rate ₹/kg' style='width:130px'>
           <button>Add ingredient</button></form>
-        <div class=metaline style='margin-top:8px'>A price band is shown to buyers, not your exact rate.</div>
-      </details>""" if admin else "")
+        <div class=metaline style='margin-top:8px'>Buyers see a price band, never your exact rate.</div>
+      </details>""" if owner else "")
+    sup_login = ""
+    if admin_only:
+        siv = con.execute("SELECT code FROM invite WHERE vendor_id=? AND revoked=0 LIMIT 1",
+                          (vid,)).fetchone()
+        if siv:
+            sup_login = (f"<div class='panel pad' style='margin:0 0 8px'>"
+                         f"<div class=ph><h3>Supplier login</h3></div>"
+                         f"<div class=metaline style='margin:8px 0'>This supplier can manage their own "
+                         f"listing at:</div><code class=inv>/login?code={E(siv['code'])}</code></div>")
+        else:
+            sup_login = (f"<form method=post action='/admin/supplier_invite' class='panel pad' style='margin:0 0 8px'>"
+                         f"<input type=hidden name=vendor_id value='{vid}'>"
+                         f"<div class=ph><h3>Supplier login</h3></div>"
+                         f"<div class=metaline style='margin:8px 0 12px'>Let this supplier log in and "
+                         f"manage their own catalogue &amp; see competitors.</div>"
+                         f"<button>Create supplier login</button></form>")
+    hdr = ("Your listing" if own_supplier else E(v["name"]))
+    sub = ("<div class=sub>Manage your catalogue and see how you compare to other suppliers.</div>"
+           if own_supplier else "")
 
     return page(v["name"], f"""
-      <a class=back href='/vendors'>← Suppliers</a>
-      <h1>{E(v['name'])}</h1>
+      {"" if own_supplier else "<a class=back href='/vendors'>← Suppliers</a>"}
+      <div class=hi><h1>{hdr}</h1>{sub}</div>
       <p style='margin-bottom:16px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
          <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></p>
+      {sup_login}
       {edit_form}
       <div class=card style='display:flex;align-items:center;gap:14px'>
         <span style='font-size:26px'>{stars(avg)}</span>
@@ -1710,10 +1806,10 @@ def view_vendor(con, vid, msg=""):
       <h2>{len(offers)} ingredient{'' if len(offers) == 1 else 's'} offered</h2>
       {add_ing}
       {(f'''<div class=tablewrap><table>
-        <thead><tr><th>Ingredient</th><th>This supplier</th><th>Other suppliers</th><th>Market range</th></tr></thead>
+        <thead><tr><th>Ingredient</th><th>{'Your price' if own_supplier else 'This supplier'}</th><th>Other suppliers</th><th>Market range</th>{'<th></th>' if owner else ''}</tr></thead>
         <tbody>{items}</tbody></table></div>''') if offers else
-        f"<div class='panel pad'><p class=empty>This supplier hasn't listed any ingredients yet."
-        f"{' Use “Add an ingredient” above to build their catalogue.' if admin else ''}</p></div>"}
+        f"<div class='panel pad'><p class=empty>{'You haven’t' if own_supplier else 'This supplier hasn’t'} listed any ingredients yet."
+        f"{' Add your first above.' if owner else ''}</p></div>"}
       <h2>Rate this vendor</h2>
       <div class=card>
         {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
@@ -1880,6 +1976,20 @@ def current():
 def is_admin():
     ident = current()
     return bool(ident and ident["is_admin"])
+
+
+def supplier_vid():
+    """Vendor id this account manages, if it's a supplier login (else None)."""
+    ident = current()
+    return ident["vendor_id"] if ident and "vendor_id" in ident.keys() and ident["vendor_id"] else None
+
+
+def is_supplier():
+    return supplier_vid() is not None
+
+
+def can_edit_vendor(con, vid):
+    return is_admin() or not gate_active(con) or supplier_vid() == vid
 
 
 def profile_done(con, code):
@@ -2157,9 +2267,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 return self.wfile.write(body)
-            # onboarding: invited (non-admin) users must complete their profile first.
+            # onboarding: invited (non-admin, non-supplier) buyers complete a profile first.
             # If a signed profile cookie survives a DB reset, restore it silently.
-            if ident and not is_admin() and not profile_done(con, ident["code"]):
+            if ident and not is_admin() and not is_supplier() and not profile_done(con, ident["code"]):
                 saved = read_prof(self.headers)
                 if saved:
                     con.execute(
@@ -2229,7 +2339,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 row = con.execute("SELECT * FROM invite WHERE code=? AND revoked=0",
                                   (code,)).fetchone()
                 if row:
-                    return self._redirect("/admin" if row["is_admin"] else "/", auth_cookie(code))
+                    dest = ("/admin" if row["is_admin"] else
+                            f"/vendor/{row['vendor_id']}" if ("vendor_id" in row.keys() and row["vendor_id"])
+                            else "/")
+                    return self._redirect(dest, auth_cookie(code))
                 time.sleep(1)   # ponytail: crude brute-force damper on code guessing
                 return self._send(login_page("Invalid or revoked invite code.", code), 401)
             if gated and not ident:
@@ -2267,6 +2380,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.commit()
                 return self._redirect(
                     "/requests?msg=" + urllib.parse.quote("Request submitted — the purchase team will update you here."))
+            if path == "/request_note":
+                f = urllib.parse.parse_qs(body)
+                rid = f.get("id", ["0"])[0]
+                note = f.get("note", [""])[0].strip()[:400]
+                _, name, company = requester_identity(con)
+                if rid.isdigit() and note and con.execute(
+                        "SELECT 1 FROM request WHERE id=?", (rid,)).fetchone():
+                    con.execute("INSERT INTO req_note(request_id,author,company,note,created) "
+                                "VALUES(?,?,?,?,?)",
+                                (int(rid), name, company, note, date.today().isoformat()))
+                    con.commit()
+                return self._redirect(f"/requests#r{rid}")
             admin = is_admin() or not gated
             if path == "/admin/request" and admin:
                 f = urllib.parse.parse_qs(body)
@@ -2314,12 +2439,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.commit()
                     vid = cur.lastrowid
                 return self._redirect(f"/vendor/{vid}")
-            if path == "/admin/vendor/edit" and admin:
+            if path == "/admin/vendor/edit":     # admin OR the supplier who owns it
                 f = urllib.parse.parse_qs(body)
                 g = lambda k: f.get(k, [""])[0].strip()
                 vid = int(g("id")) if g("id").isdigit() else 0
                 name = g("name")[:140]
-                if vid and name:
+                if vid and name and can_edit_vendor(con, vid):
                     kind = g("kind") if g("kind") in VENDOR_KINDS else "Manufacturer"
                     con.execute(
                         "UPDATE vendor SET name=?,kind=?,poc=?,phone=?,email=?,gst=?,"
@@ -2329,13 +2454,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                          g("pincode")[:10], g("address")[:200], vid))
                     con.commit()
                 return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
-            if path == "/admin/offer" and admin:
+            if path == "/admin/offer":           # admin OR the owning supplier
                 f = urllib.parse.parse_qs(body)
                 g = lambda k: f.get(k, [""])[0].strip()
                 vid = int(g("vendor_id")) if g("vendor_id").isdigit() else 0
                 ingredient = g("ingredient")[:140]
                 rate = parse_rate(g("rate"))
-                if vid and ingredient and rate:
+                if vid and ingredient and rate and can_edit_vendor(con, vid):
                     row = con.execute("SELECT id FROM ingredient WHERE name=?", (ingredient,)).fetchone()
                     if row:
                         iid = row["id"]
@@ -2352,6 +2477,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (iid, vid, lo, hi, "kg", date.today().isoformat()))
                     con.commit()
                 return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
+            if path == "/admin/offer/del":
+                f = urllib.parse.parse_qs(body)
+                vid = int(f.get("vendor_id", ["0"])[0]) if f.get("vendor_id", ["0"])[0].isdigit() else 0
+                oid = f.get("id", ["0"])[0]
+                if vid and oid.isdigit() and can_edit_vendor(con, vid):
+                    con.execute("DELETE FROM offer WHERE id=? AND vendor_id=?", (int(oid), vid))
+                    con.commit()
+                return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
+            if path == "/admin/supplier_invite" and admin:
+                vid = int(urllib.parse.parse_qs(body).get("vendor_id", ["0"])[0] or 0)
+                v = con.execute("SELECT name FROM vendor WHERE id=?", (vid,)).fetchone()
+                if v and not con.execute(
+                        "SELECT 1 FROM invite WHERE vendor_id=? AND revoked=0", (vid,)).fetchone():
+                    con.execute("INSERT INTO invite(code,note,vendor_id,created) VALUES(?,?,?,?)",
+                                (secrets.token_urlsafe(6), v["name"], vid, date.today().isoformat()))
+                    con.commit()
+                return self._redirect(f"/vendor/{vid}")
             if path == "/admin/kick" and admin:
                 # remove an active user: revoke their code (logs them out) + drop presence
                 code = urllib.parse.parse_qs(body).get("code", [""])[0]
@@ -2449,7 +2591,30 @@ def demo():
                 "WHERE ingredient='Rare Mushroom Extract'")
     con.commit()
     assert b"Fulfilled" in view_requests(con) and b"Found a vendor" in view_requests(con)
+    # community ticker + leads
+    con.execute("INSERT INTO request(ingredient,status,created,updated) VALUES('Open Item','Open','d','d')")
+    con.commit()
+    assert "Open Item" in ticker(con), "ticker shows open requests"
+    rid = con.execute("SELECT id FROM request WHERE ingredient='Open Item'").fetchone()["id"]
+    con.execute("INSERT INTO req_note(request_id,author,company,note,created) "
+                "VALUES(?,?,?,?,?)", (rid, "Zed", "Zco", "Try Vendor X", "d"))
+    con.commit()
+    assert b"Try Vendor X" in view_requests(con), "community lead shows on board"
     con.execute("DELETE FROM request")
+    con.execute("DELETE FROM req_note")
+    con.commit()
+
+    # supplier self-serve: vendor-linked invite => supplier identity + edit rights
+    con.execute("INSERT INTO invite(code,note,vendor_id,created) VALUES('SUP1','V1',1,'d')")
+    con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('GATE','x',0,'d')")
+    con.commit()  # ensure gate active
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=SUP1.{sign_code('SUP1')}"})
+    assert is_supplier() and supplier_vid() == 1
+    assert can_edit_vendor(con, 1) is True and can_edit_vendor(con, 2) is False
+    assert b"Your listing" in view_vendor(con, 1), "supplier sees own-listing framing"
+    assert b"/admin/offer/del" in view_vendor(con, 1), "supplier can remove ingredients"
+    CTX.ident = None
+    con.execute("DELETE FROM invite WHERE code IN ('SUP1','GATE')")
     con.commit()
 
     # market movers + notifications feed derive from real price history
