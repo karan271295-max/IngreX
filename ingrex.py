@@ -23,7 +23,9 @@ AUTH_SECRET = (os.environ.get("INGREX_SECRET") or AUTH_PW or "dev-insecure").enc
 COOKIE = "ing_auth"
 COOKIE_MAXAGE = 60 * 60 * 24 * 30  # 30 days
 
-DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingrex.db")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DB = os.path.join(HERE, "ingrex.db")
+LOGIN_VIDEO = os.path.join(HERE, "185365-875417518.mp4")  # served at /bg.mp4
 
 DOC_TYPES = ["COA", "MSDS", "Spec Sheet", "GMP", "FSSAI", "ISO 22000",
              "Halal", "Kosher", "Organic (NPOP/USDA)", "Allergen Statement",
@@ -872,62 +874,53 @@ html,body{height:100%}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   min-height:100vh;display:grid;place-items:center;padding:24px;overflow:hidden;
   color:#f2fbf7;background:#04140f;position:relative}
-/* animated liquid backdrop */
-.bg{position:fixed;inset:0;z-index:-2;
-  background:radial-gradient(120% 120% at 20% 10%,#0b3b2b 0%,#062018 45%,#03100c 100%)}
-.blob{position:fixed;z-index:-1;border-radius:50%;filter:blur(60px);opacity:.7;
-  mix-blend-mode:screen;will-change:transform}
-.b1{width:46vmax;height:46vmax;left:-8vmax;top:-10vmax;
-  background:radial-gradient(circle at 30% 30%,#19c98a,#0a6b4a 60%,transparent 72%);
-  animation:drift1 18s ease-in-out infinite}
-.b2{width:40vmax;height:40vmax;right:-10vmax;top:8vmax;
-  background:radial-gradient(circle at 60% 40%,#37e0c0,#0d7a56 55%,transparent 72%);
-  animation:drift2 22s ease-in-out infinite}
-.b3{width:38vmax;height:38vmax;left:18vmax;bottom:-14vmax;
-  background:radial-gradient(circle at 50% 50%,#a8e05a,#3f8a1c 55%,transparent 72%);
-  animation:drift3 26s ease-in-out infinite}
-@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}
-  50%{transform:translate(8vmax,6vmax) scale(1.15)}}
-@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}
-  50%{transform:translate(-7vmax,10vmax) scale(1.1)}}
-@keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}
-  50%{transform:translate(6vmax,-8vmax) scale(1.2)}}
+/* full-bleed background video + contrast tint */
+.vid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
+.tint{position:fixed;inset:0;z-index:-1;
+  background:radial-gradient(130% 130% at 25% 15%,rgba(4,20,15,.35),rgba(3,14,10,.72) 70%,rgba(2,10,7,.9)),
+    linear-gradient(180deg,rgba(4,20,15,.2),rgba(4,20,15,.55))}
 
-/* liquid glass card */
-.glass{position:relative;width:100%;max-width:400px;padding:44px 38px 38px;
-  border-radius:28px;overflow:hidden;
-  background:linear-gradient(135deg,rgba(255,255,255,.028),rgba(255,255,255,.008));
-  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
-  border:1px solid rgba(255,255,255,.22);
-  box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 -1px 0 rgba(255,255,255,.06) inset,
-    0 30px 80px -20px rgba(0,0,0,.6),0 8px 24px -12px rgba(0,0,0,.5)}
+/* premium glass card — ~80% transparent fill */
+.glass{position:relative;width:100%;max-width:410px;padding:46px 40px 40px;
+  border-radius:26px;overflow:hidden;
+  background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.06));
+  backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);
+  border:1px solid rgba(255,255,255,.28);
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 -1px 0 rgba(255,255,255,.08) inset,
+    0 40px 100px -24px rgba(0,0,0,.7),0 10px 30px -14px rgba(0,0,0,.55)}
+/* fine light ring on the very edge for that premium bevel */
+.glass::after{content:"";position:absolute;inset:0;border-radius:26px;pointer-events:none;
+  padding:1px;background:linear-gradient(150deg,rgba(255,255,255,.55),transparent 40%,transparent 70%,rgba(255,255,255,.18));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude}
 
-.brand{font-size:34px;font-weight:800;letter-spacing:-.03em;color:#fff}
-.brand span{color:#4fe0a6}
-.tag{display:inline-block;margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;color:#bff3dd;background:rgba(79,224,166,.14);
-  border:1px solid rgba(79,224,166,.3);padding:5px 12px;border-radius:20px}
-.lead{margin:20px 0 24px;font-size:14px;line-height:1.55;color:rgba(233,251,244,.72)}
+.brand{font-size:36px;font-weight:800;letter-spacing:-.035em;color:#fff;
+  text-shadow:0 2px 20px rgba(0,0,0,.3)}
+.brand span{color:#5fe6ad}
+.tag{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:#d6f7e8;background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.22);padding:6px 13px;border-radius:20px}
+.lead{margin:22px 0 26px;font-size:14px;line-height:1.6;color:rgba(255,255,255,.82)}
 form{display:flex;flex-direction:column;gap:14px}
 .field{position:relative}
-.field svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.6}
-input{width:100%;padding:15px 16px 15px 46px;font-size:15px;color:#fff;
-  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);
+.field svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.7}
+input{width:100%;padding:16px 16px 16px 46px;font-size:15px;color:#fff;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.24);
   border-radius:14px;outline:0;transition:border-color .18s,box-shadow .18s,background .18s}
-input::placeholder{color:rgba(233,251,244,.5)}
-input:focus{border-color:rgba(79,224,166,.7);background:rgba(255,255,255,.12);
-  box-shadow:0 0 0 4px rgba(79,224,166,.16)}
-button{padding:15px;font-size:15px;font-weight:700;color:#04140f;cursor:pointer;
-  border:0;border-radius:14px;
-  background:linear-gradient(135deg,#5cf0b4,#12b884);
-  box-shadow:0 8px 24px -8px rgba(18,184,132,.7),0 1px 0 rgba(255,255,255,.4) inset;
-  transition:transform .08s,filter .18s}
-button:hover{filter:brightness(1.06)}button:active{transform:translateY(1px)}
-.err{margin-bottom:16px;padding:11px 14px;font-size:13px;font-weight:600;color:#ffd7c2;
-  background:rgba(214,90,40,.18);border:1px solid rgba(214,90,40,.4);border-radius:12px}
-.foot{margin-top:22px;font-size:12px;color:rgba(233,251,244,.5);text-align:center}
-@media(prefers-reduced-motion:reduce){.blob{animation:none}}
-@media(max-width:440px){.glass{padding:36px 26px}.brand{font-size:30px}}
+input::placeholder{color:rgba(255,255,255,.6)}
+input:focus{border-color:rgba(95,230,173,.8);background:rgba(255,255,255,.16);
+  box-shadow:0 0 0 4px rgba(95,230,173,.2)}
+button{margin-top:2px;padding:16px;font-size:15px;font-weight:700;color:#04140f;cursor:pointer;
+  border:0;border-radius:14px;letter-spacing:.01em;
+  background:linear-gradient(135deg,#7af0c0,#12b884);
+  box-shadow:0 10px 30px -8px rgba(18,184,132,.65),0 1px 0 rgba(255,255,255,.5) inset;
+  transition:transform .08s,filter .18s,box-shadow .18s}
+button:hover{filter:brightness(1.05);box-shadow:0 14px 38px -8px rgba(18,184,132,.75),0 1px 0 rgba(255,255,255,.5) inset}
+button:active{transform:translateY(1px)}
+.err{margin-bottom:16px;padding:12px 14px;font-size:13px;font-weight:600;color:#ffd7c2;
+  background:rgba(214,90,40,.24);border:1px solid rgba(214,90,40,.45);border-radius:12px}
+.foot{margin-top:24px;font-size:12px;color:rgba(255,255,255,.6);text-align:center}
+@media(max-width:440px){.glass{padding:38px 26px}.brand{font-size:31px}}
 """
 
 
@@ -938,8 +931,9 @@ def login_page(err=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>Sign in · Ingrex</title><style>{LOGIN_CSS}</style>"
-            f"<div class=bg></div><div class='blob b1'></div>"
-            f"<div class='blob b2'></div><div class='blob b3'></div>"
+            f"<video class=vid autoplay muted loop playsinline preload=auto>"
+            f"<source src='/bg.mp4' type='video/mp4'></video>"
+            f"<div class=tint></div>"
             f"<div class=glass>"
             f"<div class=brand>ingre<span>x</span></div>"
             f"<div class=tag>Nutraceutical sourcing · Pilot</div>"
@@ -979,9 +973,46 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
 
+    def _serve_video(self):
+        try:
+            size = os.path.getsize(LOGIN_VIDEO)
+            f = open(LOGIN_VIDEO, "rb")
+        except OSError:
+            return self._send(b"video not found", 404)
+        rng = self.headers.get("Range", "")
+        start, end = 0, size - 1
+        if rng.startswith("bytes="):          # Safari requires 206 range replies
+            s, _, e = rng[6:].partition("-")
+            start = int(s) if s.isdigit() else 0
+            end = int(e) if e.isdigit() else size - 1
+            end = min(end, size - 1)
+            start = min(start, end)
+        length = end - start + 1
+        self.send_response(206 if rng else 200)
+        if rng:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Type", "video/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        self.end_headers()
+        f.seek(start)
+        remaining = length
+        while remaining > 0:
+            chunk = f.read(min(65536, remaining))
+            if not chunk:
+                break
+            try:
+                self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                break
+            remaining -= len(chunk)
+        f.close()
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
+        if url.path == "/bg.mp4":
+            return self._serve_video()
         if url.path == "/login":
             return self._send(login_page())
         if not is_authed(self.headers):
