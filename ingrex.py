@@ -12,6 +12,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import time
 import urllib.parse
 from datetime import date, datetime
@@ -265,6 +266,13 @@ p{margin:0 0 12px}
   width:17px;height:17px;stroke:#9fb0a8;stroke-width:2;fill:none}
 .top input{width:100%;padding:11px 14px 11px 42px;border-radius:11px;font-size:14px;
   border:1px solid var(--line);background:#fff}
+.live{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;
+  color:var(--acc-d);background:var(--acc-t);border:1px solid #cfe8dc;
+  padding:8px 13px;border-radius:20px;white-space:nowrap}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--acc);
+  box-shadow:0 0 0 0 rgba(13,122,86,.5);animation:pulse 2s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,122,86,.5)}
+  70%{box-shadow:0 0 0 7px rgba(13,122,86,0)}100%{box-shadow:0 0 0 0 rgba(13,122,86,0)}}
 .top .ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
   background:#fff;border:1px solid var(--line);position:relative;color:var(--mut)}
 .top .ico .dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;
@@ -444,6 +452,8 @@ def topbar(q=""):
             f"<svg viewBox='0 0 24 24'><circle cx=11 cy=11 r=7/><path d='M21 21l-4.3-4.3'/></svg>"
             f"<input name=q value='{E(q)}' placeholder='Search ingredients, suppliers, CAS no., etc.'></form>"
             f"<span class=grow></span>"
+            f"<span class=live title='Users active in the last 5 minutes'>"
+            f"<span class=pulse></span>{online_count()} online</span>"
             f"<div class=ico title=Notifications>"
             f"<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2>"
             f"<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4'/></svg>"
@@ -851,6 +861,29 @@ def post_rate(con, body):
     return vid, "Thanks - rating recorded."
 
 
+# ---------- presence ----------
+# ponytail: in-memory, per-process. Resets on restart and is NOT shared across
+# instances — fine for a single-box pilot. For multi-instance, move to Redis.
+ONLINE = {}
+ONLINE_LOCK = threading.Lock()
+ONLINE_WINDOW = 300  # seconds since last request to still count as "online"
+
+
+def touch_online(cid):
+    now = time.time()
+    with ONLINE_LOCK:
+        ONLINE[cid] = now
+        for k, t in list(ONLINE.items()):
+            if now - t > ONLINE_WINDOW:
+                del ONLINE[k]
+
+
+def online_count():
+    now = time.time()
+    with ONLINE_LOCK:
+        return sum(1 for t in ONLINE.values() if now - t <= ONLINE_WINDOW)
+
+
 # ---------- auth gate ----------
 
 def auth_token():
@@ -883,7 +916,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 /* premium glass card — ~80% transparent fill */
 .glass{position:relative;width:100%;max-width:410px;padding:46px 40px 40px;
   border-radius:26px;overflow:hidden;
-  background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.06));
+  background:linear-gradient(150deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
   backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.28);
   box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 -1px 0 rgba(255,255,255,.08) inset,
@@ -1017,6 +1050,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._send(login_page())
         if not is_authed(self.headers):
             return self._redirect("/login")
+        xff = self.headers.get("X-Forwarded-For", "")
+        touch_online(xff.split(",")[0].strip() or self.client_address[0])
         con = connect()
         try:
             if url.path == "/":
@@ -1112,6 +1147,16 @@ def demo():
     for v in range(1, len(SEED_VENDORS) + 1):
         assert view_vendor(con, v)
     assert view_ingredient(con, 9999) is None and view_vendor(con, 9999) is None
+    # presence: distinct clients counted, stale ones drop out of the window
+    ONLINE.clear()
+    touch_online("1.1.1.1")
+    touch_online("2.2.2.2")
+    touch_online("1.1.1.1")
+    assert online_count() == 2, "distinct clients"
+    ONLINE["3.3.3.3"] = time.time() - ONLINE_WINDOW - 1
+    assert online_count() == 2, "stale client excluded"
+    ONLINE.clear()
+
     assert view_dashboard(con)
     assert view_search(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
     assert b"Good " in view_dashboard(con) and b"stat" in view_dashboard(con)
