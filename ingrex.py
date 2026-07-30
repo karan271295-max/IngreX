@@ -65,7 +65,8 @@ CREATE TABLE vendor (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL CHECK (kind IN ('Manufacturer','Trader','Importer')),
   city TEXT, country TEXT, gst TEXT, docs TEXT DEFAULT '',
-  poc TEXT, phone TEXT, email TEXT, address TEXT, state TEXT, pincode TEXT);
+  poc TEXT, phone TEXT, email TEXT, address TEXT, state TEXT, pincode TEXT,
+  blacklisted INTEGER DEFAULT 0);
 CREATE TABLE offer (
   id INTEGER PRIMARY KEY,
   ingredient_id INTEGER NOT NULL REFERENCES ingredient(id),
@@ -258,6 +259,8 @@ def ensure_invites(con):
     # invite.vendor_id links a supplier login to the vendor it manages
     if "vendor_id" not in [r[1] for r in con.execute("PRAGMA table_info(invite)")]:
         con.execute("ALTER TABLE invite ADD COLUMN vendor_id INTEGER")
+    if "blacklisted" not in [r[1] for r in con.execute("PRAGMA table_info(vendor)")]:
+        con.execute("ALTER TABLE vendor ADD COLUMN blacklisted INTEGER DEFAULT 0")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
@@ -485,6 +488,8 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 .envbox{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:9px 11px;
   border:1px solid var(--line);border-radius:8px;background:var(--line2);color:var(--ink);
   resize:vertical;margin-top:4px}
+.blbanner{background:#fbe9e6;border:1px solid #e6b3ab;color:#a83a2c;font-size:13px;font-weight:600;
+  padding:9px 13px;border-radius:10px;margin-bottom:12px}
 .addsup summary{cursor:pointer;font-size:14px;font-weight:650;color:var(--acc-d);list-style:none}
 .addsup summary::-webkit-details-marker{display:none}
 .addsup[open] summary{margin-bottom:2px}
@@ -1094,7 +1099,8 @@ def offers_for_ingredient(con, ing_id):
                (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) avg_score,
                (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n_score
         FROM offer o JOIN vendor v ON v.id=o.vendor_id
-        WHERE o.ingredient_id=? ORDER BY o.price_min""", (ing_id,)).fetchall()
+        WHERE o.ingredient_id=? AND COALESCE(v.blacklisted,0)=0
+        ORDER BY o.price_min""", (ing_id,)).fetchall()
 
 
 # ---------- views ----------
@@ -1626,21 +1632,27 @@ def vendor_card(o, ing, best=False):
             f"{cta}</div></div>")
 
 
-def view_vendors(con, q=""):
+def view_vendors(con, q="", bl=False):
     q = (q or "").strip()
-    sql = """
-        SELECT v.*, (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) a,
-               (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n,
-               (SELECT COUNT(*) FROM offer WHERE vendor_id=v.id) items
-        FROM vendor v"""
-    args = []
+    admin = is_admin() or not gate_active(con)
+    where, args = [], []
     if q:
-        sql += " WHERE (v.name LIKE ? OR v.state LIKE ? OR v.poc LIKE ? OR v.gst LIKE ?)"
-        args = [f"%{q}%"] * 4
-    sql += " ORDER BY a DESC NULLS LAST, v.name"
+        where.append("(v.name LIKE ? OR v.state LIKE ? OR v.poc LIKE ? OR v.gst LIKE ?)")
+        args += [f"%{q}%"] * 4
+    if admin and bl:
+        where.append("COALESCE(v.blacklisted,0)=1")     # admin: blacklisted-only view
+    else:
+        where.append("COALESCE(v.blacklisted,0)=0")     # default: hide blacklisted for everyone
+    sql = ("SELECT v.*, (SELECT AVG(score) FROM rating WHERE vendor_id=v.id) a,"
+           " (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n,"
+           " (SELECT COUNT(*) FROM offer WHERE vendor_id=v.id) items FROM vendor v"
+           + (" WHERE " + " AND ".join(where) if where else "")
+           + " ORDER BY a DESC NULLS LAST, v.name")
     rows = con.execute(sql, args).fetchall()
+    n_bl = con.execute("SELECT COUNT(*) c FROM vendor WHERE COALESCE(blacklisted,0)=1").fetchone()["c"]
     cards = "".join(f"""<a class=tile href='/vendor/{v['id']}'>
-        <div class=ttl>{E(v['name'])}</div>
+        <div class=ttl>{E(v['name'])}
+          {"<span class=tag style='color:#b4541c;border-color:#e6c3ad'>blacklisted</span>" if (admin and "blacklisted" in v.keys() and v["blacklisted"]) else ""}</div>
         <div style='margin:9px 0 7px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
           <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></div>
         <div style='margin-bottom:6px'>{stars(v['a'])} <span class=count>({v['n']})</span></div>
@@ -1670,8 +1682,11 @@ def view_vendors(con, q=""):
         <input type=search name=q value='{E(q)}'
           placeholder='Search suppliers by name, state, contact or GST…'>
         <button>Search</button></form></div>
-      <h2 style='margin-top:0'>{len(rows)} supplier{'' if len(rows) == 1 else 's'}
-        {f'· “{E(q)}”' if q else ''}</h2>
+      <div class=ph style='margin-bottom:12px'>
+        <h2 style='margin:0'>{len(rows)} supplier{'' if len(rows) == 1 else 's'}
+          {'· blacklisted' if bl else ''}{f' · “{E(q)}”' if q else ''}</h2>
+        {(f"<a class=count href='/vendors{'' if bl else '?bl=1'}'>"
+          f"{'← All suppliers' if bl else f'View blacklisted ({n_bl})'}</a>") if admin else ""}</div>
       <div class=grid>{cards or "<p class=empty>No suppliers matched.</p>"}</div>""",
                 active="suppliers")
 
@@ -1790,12 +1805,23 @@ def view_vendor(con, vid, msg=""):
     hdr = ("Your listing" if own_supplier else E(v["name"]))
     sub = ("<div class=sub>Manage your catalogue and see how you compare to other suppliers.</div>"
            if own_supplier else "")
+    bl = v["blacklisted"] if "blacklisted" in v.keys() else 0
+    bl_banner = ("<div class=blbanner>⛔ Blacklisted — hidden from buyers across the app.</div>"
+                 if bl else "")
+    bl_btn = (f"<form method=post action='/admin/vendor/blacklist' style='margin:0 0 8px'>"
+              f"<input type=hidden name=id value='{vid}'>"
+              f"<input type=hidden name=on value='{0 if bl else 1}'>"
+              f"<button class='{'wbtn' if bl else 'xbtn'}'>"
+              f"{'Remove from blacklist' if bl else '⛔ Blacklist this supplier'}</button></form>"
+              if admin_only else "")
 
     return page(v["name"], f"""
       {"" if own_supplier else "<a class=back href='/vendors'>← Suppliers</a>"}
       <div class=hi><h1>{hdr}</h1>{sub}</div>
+      {bl_banner}
       <p style='margin-bottom:16px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
          <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></p>
+      {bl_btn}
       {sup_login}
       {edit_form}
       <div class=card style='display:flex;align-items:center;gap:14px'>
@@ -2303,7 +2329,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif url.path == "/watchlist":
                 out = view_watchlist(con, wl)
             elif url.path == "/vendors":
-                out = view_vendors(con, params.get("q", [""])[0])
+                out = view_vendors(con, params.get("q", [""])[0],
+                                   params.get("bl", [""])[0] == "1")
             elif url.path == "/insights":
                 out = view_insights(con)
             elif url.path == "/reviews":
@@ -2485,6 +2512,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.execute("DELETE FROM offer WHERE id=? AND vendor_id=?", (int(oid), vid))
                     con.commit()
                 return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
+            if path == "/admin/vendor/blacklist" and admin:
+                f = urllib.parse.parse_qs(body)
+                vid = int(f.get("id", ["0"])[0]) if f.get("id", ["0"])[0].isdigit() else 0
+                on = 1 if f.get("on", ["1"])[0] == "1" else 0
+                if vid:
+                    con.execute("UPDATE vendor SET blacklisted=? WHERE id=?", (on, vid))
+                    con.commit()
+                return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
             if path == "/admin/supplier_invite" and admin:
                 vid = int(urllib.parse.parse_qs(body).get("vendor_id", ["0"])[0] or 0)
                 v = con.execute("SELECT name FROM vendor WHERE id=?", (vid,)).fetchone()
@@ -2602,6 +2637,14 @@ def demo():
     assert b"Try Vendor X" in view_requests(con), "community lead shows on board"
     con.execute("DELETE FROM request")
     con.execute("DELETE FROM req_note")
+    con.commit()
+
+    # blacklist: hidden from buyer ingredient cards, shown to admin with a badge
+    con.execute("UPDATE vendor SET blacklisted=1 WHERE id=1")
+    con.commit()
+    assert all(o["vid"] != 1 for o in offers_for_ingredient(con, 1)), "blacklisted vendor hidden"
+    assert b"Blacklisted" in view_vendor(con, 1), "vendor page shows blacklist banner"
+    con.execute("UPDATE vendor SET blacklisted=0 WHERE id=1")
     con.commit()
 
     # supplier self-serve: vendor-linked invite => supplier identity + edit rights
