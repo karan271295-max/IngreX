@@ -479,6 +479,9 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
 .envbox{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:9px 11px;
   border:1px solid var(--line);border-radius:8px;background:var(--line2);color:var(--ink);
   resize:vertical;margin-top:4px}
+.addsup summary{cursor:pointer;font-size:14px;font-weight:650;color:var(--acc-d);list-style:none}
+.addsup summary::-webkit-details-marker{display:none}
+.addsup[open] summary{margin-bottom:2px}
 .vform{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .vform label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:650;color:var(--mut)}
 .vform label.full{grid-column:1/-1}
@@ -1068,20 +1071,23 @@ def category_pills(con, active=""):
 
 def stat_cards(con):
     ing = con.execute("SELECT COUNT(*) n FROM ingredient").fetchone()["n"]
-    ven = con.execute(
-        "SELECT COUNT(*) n, SUM(kind='Manufacturer') m FROM vendor").fetchone()
-    rat = con.execute("SELECT AVG(score) a, COUNT(*) n FROM rating").fetchone()
-    pts = con.execute("SELECT COUNT(*) n FROM price_point").fetchone()["n"]
-    avg = f"{rat['a']:.1f} ★" if rat["a"] else "—"
+    ven = con.execute("SELECT COUNT(*) n FROM vendor").fetchone()["n"]
+    verified = con.execute(
+        "SELECT COUNT(*) n FROM vendor WHERE gst IS NOT NULL AND gst!=''").fetchone()["n"]
+    mv = moves_map(con)
+    easing = sum(1 for p in mv.values() if p < 0)
+    rising = sum(1 for p in mv.values() if p > 0)
     return f"""<div class=stats>
-      <div class=stat><div class=l>Ingredients tracked</div><div class=v>{ing}</div>
-        <div class=d>across the catalogue</div></div>
-      <div class=stat><div class=l>Suppliers</div><div class=v>{ven['n']}</div>
-        <div class=d><b>{ven['m']}</b> manufacturers · rest traders/importers</div></div>
-      <div class=stat><div class=l>Avg supplier rating</div><div class=v>{avg}</div>
-        <div class=d>from <b>{rat['n']}</b> reviews</div></div>
-      <div class=stat><div class=l>Market data points</div><div class=v>{pts}</div>
-        <div class=d>12-month price history</div></div></div>"""
+      <div class=stat><div class=l>Ingredients to source</div><div class=v>{ing}</div>
+        <div class=d>ready to compare</div></div>
+      <div class=stat><div class=l>Verified suppliers</div><div class=v>{ven}</div>
+        <div class=d><b>{verified}</b> with GST on file</div></div>
+      <div class=stat><div class=l>Prices easing</div>
+        <div class=v><span class=down>{easing}</span></div>
+        <div class=d>buying opportunities this month</div></div>
+      <div class=stat><div class=l>Prices rising</div>
+        <div class=v><span class=up>{rising}</span></div>
+        <div class=d>watch before you buy</div></div></div>"""
 
 
 def top_suppliers(con, limit=3):
@@ -1301,25 +1307,6 @@ def view_admin(con):
           <tbody>{inv_rows}</tbody></table></div>
       </div>
       <div class='panel pad'>
-        <div class=ph><h3>Add a supplier</h3></div>
-        <div class=metaline style='margin:8px 0 14px'>Add a supplier and its registration details.
-          It appears in the Suppliers directory immediately.</div>
-        <form method=post action='/admin/vendor'>
-          <div class=vform>
-            <label>Company name<input name=name required maxlength=140 placeholder='e.g. Acme Nutra Pvt Ltd'></label>
-            <label>Type<select name=kind>{"".join(f"<option>{k}</option>" for k in VENDOR_KINDS)}</select></label>
-            <label>Contact person<input name=poc maxlength=80></label>
-            <label>Phone<input name=phone maxlength=40></label>
-            <label>Email<input name=email maxlength=140></label>
-            <label>GSTIN<input name=gst maxlength=15 style='text-transform:uppercase'></label>
-            <label>State<input name=state maxlength=60></label>
-            <label>Pincode<input name=pincode maxlength=10></label>
-            <label class=full>Address<input name=address maxlength=200></label>
-          </div>
-          <button style='margin-top:14px'>Add supplier</button>
-        </form>
-      </div>
-      <div class='panel pad'>
         <div class=ph><h3>Keep users across deploys</h3></div>
         <div class=metaline style='margin:8px 0 14px'>Free hosting resets the database on every
           deploy, so codes created here are temporary. Paste these into your host's
@@ -1416,12 +1403,19 @@ def view_insights(con):
     rises = [m for m in sorted(movers, key=lambda m: m["pct"], reverse=True) if m["pct"] > 0][:6]
     falls = [m for m in sorted(movers, key=lambda m: m["pct"]) if m["pct"] < 0][:6]
     cats = con.execute("""
-        SELECT i.category, COUNT(DISTINCT i.id) n, MIN(o.price_min) lo, MAX(o.price_max) hi
-        FROM ingredient i LEFT JOIN offer o ON o.ingredient_id=i.id
+        SELECT i.category, COUNT(DISTINCT i.id) n FROM ingredient i
         GROUP BY i.category ORDER BY n DESC""").fetchall()
     kinds = {r["kind"]: r["n"] for r in
              con.execute("SELECT kind, COUNT(*) n FROM vendor GROUP BY kind")}
     avg_mv = sum(m["pct"] for m in movers) / len(movers) if movers else 0
+    # per-category average % movement (no exact prices shown anywhere on insights)
+    mv = moves_map(con)
+    cat_pct = {}
+    for c in cats:
+        ids = [r["id"] for r in con.execute(
+            "SELECT id FROM ingredient WHERE category=?", (c["category"],))]
+        ps = [mv[i] for i in ids if i in mv]
+        cat_pct[c["category"]] = (sum(ps) / len(ps)) if ps else None
 
     def mlist(items, up):
         if not items:
@@ -1429,14 +1423,15 @@ def view_insights(con):
         return "".join(
             f"<a class=mover href='/ingredient/{m['id']}'>"
             f"<span><span class=nm>{E(m['name'])}</span>"
-            f"<div class=pr>₹{m['price']:,.0f}/{E(m['unit'])}</div></span>"
+            f"<div class=pr>{E(m['unit'])} · market</div></span>"
             f"<span class='pc {'up' if up else 'down'}'>{'▲' if up else '▼'} "
             f"{abs(m['pct']):.1f}%</span></a>" for m in items)
 
     def cat_row(c):
-        rng = f"₹{c['lo']:,.0f}–{c['hi']:,.0f}" if c["lo"] else "—"
-        return (f"<tr><td><b>{E(c['category'])}</b></td><td>{c['n']}</td>"
-                f"<td>{rng}</td></tr>")
+        p = cat_pct.get(c["category"])
+        chg = ("—" if p is None else
+               f"<span class={'up' if p >= 0 else 'down'}>{'+' if p >= 0 else ''}{p:.1f}%</span>")
+        return (f"<tr><td><b>{E(c['category'])}</b></td><td>{c['n']}</td><td>{chg}</td></tr>")
     cat_rows = "".join(cat_row(c) for c in cats)
 
     body = f"""
@@ -1464,9 +1459,9 @@ def view_insights(con):
           {mlist(falls, False)}</div>
       </div>
       <div class='panel pad'>
-        <div class=ph><h3>Category overview</h3></div>
+        <div class=ph><h3>Category overview</h3><span class=count>avg 12-mo change</span></div>
         <div class=tablewrap style='margin-top:12px'><table>
-          <thead><tr><th>Category</th><th>Ingredients</th><th>Price range</th></tr></thead>
+          <thead><tr><th>Category</th><th>Ingredients</th><th>12-mo change</th></tr></thead>
           <tbody>{cat_rows}</tbody></table></div>
       </div>"""
     return page("Market insights", body, active="insights")
@@ -1580,9 +1575,27 @@ def view_vendors(con, q=""):
           <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></div>
         <div style='margin-bottom:6px'>{stars(v['a'])} <span class=count>({v['n']})</span></div>
         <div class=count>{v['items']} ingredient(s) listed</div></a>""" for v in rows)
+    add_form = (f"""
+      <details class='panel pad addsup' style='margin-bottom:16px'>
+        <summary>+ Add a supplier</summary>
+        <form method=post action='/admin/vendor' style='margin-top:14px'>
+          <div class=vform>
+            <label>Company name<input name=name required maxlength=140 placeholder='e.g. Acme Nutra Pvt Ltd'></label>
+            <label>Type<select name=kind>{"".join(f"<option>{k}</option>" for k in VENDOR_KINDS)}</select></label>
+            <label>Contact person<input name=poc maxlength=80></label>
+            <label>Phone<input name=phone maxlength=40></label>
+            <label>Email<input name=email maxlength=140></label>
+            <label>GSTIN<input name=gst maxlength=15 style='text-transform:uppercase'></label>
+            <label>State<input name=state maxlength=60></label>
+            <label>Pincode<input name=pincode maxlength=10></label>
+            <label class=full>Address<input name=address maxlength=200></label>
+          </div>
+          <button style='margin-top:14px'>Add supplier</button></form>
+      </details>""" if (is_admin() or not gate_active(con)) else "")
     return page("Vendors", f"""
       <div class=hi><h1>Suppliers</h1>
         <div class=sub>Manufacturers, traders and importers on the platform.</div></div>
+      {add_form}
       <div class='panel pad' style='margin-bottom:16px'><form class=filters method=get action='/vendors'>
         <input type=search name=q value='{E(q)}'
           placeholder='Search suppliers by name, state, contact or GST…'>
@@ -1599,18 +1612,27 @@ def view_vendor(con, vid, msg=""):
         return None
     avg, n = vendor_rating(con, vid)
     offers = con.execute("""
-        SELECT o.*, i.id iid, i.name iname, i.category FROM offer o
-        JOIN ingredient i ON i.id=o.ingredient_id WHERE o.vendor_id=? ORDER BY i.name""",
-                         (vid,)).fetchall()
+        SELECT o.*, i.id iid, i.name iname, i.category,
+          (SELECT COUNT(DISTINCT vendor_id) FROM offer o2
+             WHERE o2.ingredient_id=o.ingredient_id AND o2.vendor_id!=o.vendor_id) others,
+          (SELECT MIN(price_min) FROM offer o3 WHERE o3.ingredient_id=o.ingredient_id) mlo,
+          (SELECT MAX(price_max) FROM offer o4 WHERE o4.ingredient_id=o.ingredient_id) mhi
+        FROM offer o JOIN ingredient i ON i.id=o.ingredient_id
+        WHERE o.vendor_id=? ORDER BY i.name""", (vid,)).fetchall()
     reviews = con.execute(
         "SELECT * FROM rating WHERE vendor_id=? ORDER BY id DESC", (vid,)).fetchall()
+    admin = is_admin() or not gate_active(con)
 
-    items = "".join(f"""<tr><td><a href='/ingredient/{o['iid']}'><b>{E(o['iname'])}</b></a>
-        <div class=metaline>{E(o['category'])}</div></td>
-        <td><span class=price style='font-size:15px'>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f}</span>
-            <div class=metaline>per {E(o['unit'])}</div></td>
-        <td>{E(o['moq'] or '—')}</td><td>{str(o['lead_days']) + ' d' if o['lead_days'] else '—'}</td>
-        <td class=metaline>{E(o['updated'] or '')}</td></tr>""" for o in offers)
+    def item_row(o):
+        others = (f"<a href='/ingredient/{o['iid']}'>{o['others']} other supplier"
+                  f"{'' if o['others'] == 1 else 's'}</a>" if o["others"] else "<span class=metaline>only here</span>")
+        market = f"₹{o['mlo']:,.0f}–{o['mhi']:,.0f}" if o["mlo"] else "—"
+        return (f"<tr><td><a href='/ingredient/{o['iid']}'><b>{E(o['iname'])}</b></a>"
+                f"<div class=metaline>{E(o['category'])}</div></td>"
+                f"<td><span class=price style='font-size:14px'>₹{o['price_min']:,.0f}–{o['price_max']:,.0f}</span>"
+                f"<div class=metaline>/{E(o['unit'])}</div></td>"
+                f"<td>{others}</td><td class=metaline>{market}</td></tr>")
+    items = "".join(item_row(o) for o in offers)
 
     revs = "".join(f"""<div class=review>
         <b>{E(r['rater'])}</b> <span class=tag>{E(r['rater_type'] or 'Client')}</span>
@@ -1644,23 +1666,54 @@ def view_vendor(con, vid, msg=""):
     rater_as = (_pf["name"] if _pf and _pf["name"] else (_id["note"] if _id else "You")) + \
                (f" · {_pf['company']}" if _pf and _pf["company"] else "")
 
+    vk = lambda k: (v[k] if k in v.keys() and v[k] else "")
+    edit_form = (f"""
+      <details class='panel pad addsup' style='margin:0 0 8px'>
+        <summary>Edit supplier information</summary>
+        <form method=post action='/admin/vendor/edit' style='margin-top:14px'>
+          <input type=hidden name=id value='{vid}'>
+          <div class=vform>
+            <label>Company name<input name=name required maxlength=140 value='{E(v['name'])}'></label>
+            <label>Type<select name=kind>{"".join(f"<option{' selected' if v['kind'] == k else ''}>{k}</option>" for k in VENDOR_KINDS)}</select></label>
+            <label>Contact person<input name=poc maxlength=80 value='{E(vk('poc'))}'></label>
+            <label>Phone<input name=phone maxlength=40 value='{E(vk('phone'))}'></label>
+            <label>Email<input name=email maxlength=140 value='{E(vk('email'))}'></label>
+            <label>GSTIN<input name=gst maxlength=15 value='{E(vk('gst'))}'></label>
+            <label>State<input name=state maxlength=60 value='{E(vk('state'))}'></label>
+            <label>Pincode<input name=pincode maxlength=10 value='{E(vk('pincode'))}'></label>
+            <label class=full>Address<input name=address maxlength=200 value='{E(vk('address'))}'></label>
+          </div>
+          <button style='margin-top:14px'>Save changes</button></form>
+      </details>""" if admin else "")
+    add_ing = (f"""
+      <details class='panel pad addsup' style='margin:0 0 8px'>
+        <summary>+ Add an ingredient this supplier offers</summary>
+        <form method=post action='/admin/offer' class=filters style='margin-top:14px'>
+          <input type=hidden name=vendor_id value='{vid}'>
+          <input name=ingredient required maxlength=140 placeholder='Ingredient name' style='flex:1'>
+          <input name=rate required inputmode=decimal placeholder='Rate ₹/kg' style='width:130px'>
+          <button>Add ingredient</button></form>
+        <div class=metaline style='margin-top:8px'>A price band is shown to buyers, not your exact rate.</div>
+      </details>""" if admin else "")
+
     return page(v["name"], f"""
-      <a class=back href='/vendors'>← Vendors</a>
+      <a class=back href='/vendors'>← Suppliers</a>
       <h1>{E(v['name'])}</h1>
       <p style='margin-bottom:16px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
          <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></p>
+      {edit_form}
       <div class=card style='display:flex;align-items:center;gap:14px'>
         <span style='font-size:26px'>{stars(avg)}</span>
         <span class=count>from {n} client / manufacturer review(s)</span></div>
       <h2>Contact & registration</h2>
       <div class=card>{contacts}</div>
-      <h2>Documents on file</h2>
-      <div class=card><div class=chips>{doc_tags(v['docs'])}</div></div>
-      <h2>{len(offers)} ingredient{'' if len(offers) == 1 else 's'} listed</h2>
-      <div class=tablewrap><table>
-        <thead><tr><th>Ingredient</th><th>Price range</th><th>MOQ</th><th>Lead</th><th>Updated</th></tr></thead>
-        <tbody>{items or "<tr><td colspan=5 class=empty>Nothing listed.</td></tr>"}</tbody>
-      </table></div>
+      <h2>{len(offers)} ingredient{'' if len(offers) == 1 else 's'} offered</h2>
+      {add_ing}
+      {(f'''<div class=tablewrap><table>
+        <thead><tr><th>Ingredient</th><th>This supplier</th><th>Other suppliers</th><th>Market range</th></tr></thead>
+        <tbody>{items}</tbody></table></div>''') if offers else
+        f"<div class='panel pad'><p class=empty>This supplier hasn't listed any ingredients yet."
+        f"{' Use “Add an ingredient” above to build their catalogue.' if admin else ''}</p></div>"}
       <h2>Rate this vendor</h2>
       <div class=card>
         {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
@@ -2261,6 +2314,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.commit()
                     vid = cur.lastrowid
                 return self._redirect(f"/vendor/{vid}")
+            if path == "/admin/vendor/edit" and admin:
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                vid = int(g("id")) if g("id").isdigit() else 0
+                name = g("name")[:140]
+                if vid and name:
+                    kind = g("kind") if g("kind") in VENDOR_KINDS else "Manufacturer"
+                    con.execute(
+                        "UPDATE vendor SET name=?,kind=?,poc=?,phone=?,email=?,gst=?,"
+                        "state=?,city=?,pincode=?,address=? WHERE id=?",
+                        (name, kind, g("poc")[:80], g("phone")[:40], g("email")[:140],
+                         g("gst").upper()[:15], g("state")[:60], g("state")[:60] or "India",
+                         g("pincode")[:10], g("address")[:200], vid))
+                    con.commit()
+                return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
+            if path == "/admin/offer" and admin:
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                vid = int(g("vendor_id")) if g("vendor_id").isdigit() else 0
+                ingredient = g("ingredient")[:140]
+                rate = parse_rate(g("rate"))
+                if vid and ingredient and rate:
+                    row = con.execute("SELECT id FROM ingredient WHERE name=?", (ingredient,)).fetchone()
+                    if row:
+                        iid = row["id"]
+                    else:
+                        cat = infer_category(ingredient)
+                        iid = con.execute(
+                            "INSERT INTO ingredient(name,category,cas,functions,description,unit) "
+                            "VALUES(?,?,?,?,?,?)",
+                            (ingredient, cat, "—", cat,
+                             f"{ingredient} — supplier-listed ingredient.", "kg")).lastrowid
+                    lo, hi = price_band(rate)
+                    con.execute("INSERT OR IGNORE INTO offer(ingredient_id,vendor_id,price_min,"
+                                "price_max,unit,updated) VALUES(?,?,?,?,?,?)",
+                                (iid, vid, lo, hi, "kg", date.today().isoformat()))
+                    con.commit()
+                return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
             if path == "/admin/kick" and admin:
                 # remove an active user: revoke their code (logs them out) + drop presence
                 code = urllib.parse.parse_qs(body).get("code", [""])[0]
