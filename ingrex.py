@@ -225,24 +225,41 @@ p{margin:0 0 12px}
 
 /* app shell */
 .shell{display:flex;min-height:100vh}
-.side{width:250px;flex:none;position:sticky;top:0;height:100vh;overflow:auto;
-  background:var(--sb);color:#b7c6bf;display:flex;flex-direction:column;padding:20px 14px}
+.side{width:188px;flex:none;position:sticky;top:0;height:100vh;overflow:auto;
+  background:var(--sb);color:#b7c6bf;display:flex;flex-direction:column;padding:20px 12px}
 .side .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 2px;color:#fff}
 .side .brand .mk{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
   font-weight:800;font-size:18px;color:#fff;background:linear-gradient(135deg,#12b884,#0a5d41)}
 .side .brand .nm{font-size:20px;font-weight:800;letter-spacing:-.03em}
 .side .brand .nm span{color:#4fe0a6}
 .side .brand small{display:block;font-size:10px;font-weight:600;color:#7f958c;letter-spacing:.02em}
-.nav{display:flex;flex-direction:column;gap:2px;margin-top:18px}
-.nav a,.nav span.item{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;
-  font-size:14px;font-weight:600;color:#a9bcb3;cursor:pointer}
-.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
-.nav a.on{background:var(--acc);color:#fff}
-.nav a.on svg{stroke:#fff}
-.nav svg{width:18px;height:18px;stroke:#8fa39b;stroke-width:1.9;fill:none;flex:none}
-.nav .soon{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:.06em;color:#5f746b;
-  border:1px solid rgba(255,255,255,.12);padding:2px 6px;border-radius:20px}
-.nav span.item{color:#6f847b;cursor:default}
+/* LineSidebar (React Bits) ported to vanilla — per-item --effect driven by a
+   rAF proximity loop in SIDEBAR_JS; every derived property reads the same value. */
+.line-sidebar{--accent:#3fe0a6;--txt:#9fb3aa;--marker:#5f746b;--mlen:26px;--mgap:6px;
+  --tscale:.5;--shift:16px;--igap:16px;--fs:.95rem;
+  position:relative;margin-top:22px}
+.line-sidebar--markers{padding-left:calc(var(--mlen) + var(--mgap) + 8px)}
+.line-sidebar__list{list-style:none;margin:0;padding:2px 0;display:flex;flex-direction:column;gap:var(--igap)}
+.line-sidebar__item{position:relative}
+.line-sidebar__item a{display:block;text-decoration:none}
+.line-sidebar__item.soon{cursor:default}
+.line-sidebar__item::before{content:'';position:absolute;inset:-6px -20px -6px -60px}
+.line-sidebar__label{position:relative;display:inline-flex;align-items:baseline;
+  font-size:var(--fs);font-weight:600;line-height:1.2;
+  color:color-mix(in srgb,var(--accent) calc(var(--effect,0) * 100%),var(--txt));
+  transform:translateX(calc(var(--effect,0) * var(--shift)))}
+.line-sidebar__index{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-right:.55rem;
+  font-size:.8em;opacity:calc(.5 + var(--effect,0) * .5)}
+.line-sidebar__marker{position:absolute;top:50%;left:calc(-1 * var(--mlen) - var(--mgap));
+  height:1px;width:var(--mlen);transform-origin:left center;
+  background-color:color-mix(in srgb,var(--accent) calc(var(--effect,0) * 100%),var(--marker));
+  transform:translateY(-50%) scaleX(calc(.7 + var(--effect,0) * .5))}
+.line-sidebar--markers .line-sidebar__item:not(:last-child)::after{content:'';position:absolute;
+  top:calc(100% + var(--igap) / 2);left:calc(-1 * var(--mlen) - var(--mgap));height:1px;
+  width:calc(var(--mlen) * var(--tscale));background-color:var(--marker);opacity:.5;
+  transform-origin:left center;transform:translateY(-50%) scaleX(calc(.7 + var(--effect,0) * .6))}
+.line-sidebar__item .soon{margin-left:8px;font-size:9px;font-weight:700;letter-spacing:.06em;
+  color:#5f746b;border:1px solid rgba(255,255,255,.12);padding:1px 5px;border-radius:20px}
 .grow{flex:1}
 .upsell{margin:14px 4px;padding:16px;border-radius:14px;
   background:linear-gradient(150deg,rgba(18,184,132,.22),rgba(106,88,196,.18));
@@ -436,7 +453,7 @@ footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid va
 
 @media(max-width:960px){
   .stats{grid-template-columns:repeat(2,1fr)}.duo{grid-template-columns:1fr}
-  .side{width:200px}
+  .side{width:150px}
 }
 @media(max-width:720px){
   .shell{flex-direction:column}
@@ -464,23 +481,28 @@ NAV = [
 ]
 
 
-def icon(path):
-    return f"<svg viewBox='0 0 24 24' stroke-linecap='round' stroke-linejoin='round'><path d='{path}'/></svg>"
-
-
 def sidebar(active):
-    items = ""
-    for label, href, key, path in NAV:
-        on = " on" if key == active else ""
+    active_idx = next((i for i, n in enumerate(NAV) if n[2] == active), -1)
+    lis = ""
+    for i, (label, href, key, _path) in enumerate(NAV):
+        cur = " aria-current=true" if key == active else ""
+        inner = (f"<span class=line-sidebar__marker aria-hidden=true></span>"
+                 f"<span class=line-sidebar__label>"
+                 f"<span class=line-sidebar__index>{i + 1:02d}</span>"
+                 f"<span class=line-sidebar__text>{label}</span></span>")
         if href:
-            items += f"<a class='{on.strip()}' href='{href}'>{icon(path)}{label}</a>"
+            lis += f"<li class=line-sidebar__item{cur}><a href='{href}'>{inner}</a></li>"
         else:
-            items += f"<span class=item>{icon(path)}{label}<span class=soon>SOON</span></span>"
+            lis += (f"<li class='line-sidebar__item soon'>{inner}"
+                    f"<span class=soon>SOON</span></li>")
+    nav = (f"<nav class='line-sidebar line-sidebar--markers line-sidebar--scale-tick' "
+           f"data-active='{active_idx}' data-radius='120'>"
+           f"<ul class=line-sidebar__list>{lis}</ul></nav>")
     return (f"<aside class=side>"
             f"<a class=brand href='/'><span class=mk>i</span>"
             f"<span class=nm>ingre<span>x</span>"
             f"<small>Ingredients. Sourced better.</small></span></a>"
-            f"<nav class=nav>{items}</nav><div class=grow></div>"
+            f"{nav}<div class=grow></div>"
             f"<div class=upsell><b>Pilot preview</b>"
             f"<p>Price history, analytics & verified supplier insights are on the roadmap.</p>"
             f"<a href='/'>Explore catalogue</a></div>"
@@ -532,6 +554,27 @@ document.cookie='seen='+encodeURIComponent(sig)+';path=/;max-age=31536000;samesi
 var d=n.querySelector('.dot');if(d)d.remove();}});})();
 </script>"""
 
+# LineSidebar proximity effect ported to vanilla: one rAF loop eases each item's
+# --effect toward its cursor-distance target (frame-rate independent smoothing).
+SIDEBAR_JS = """<script>
+(function(){var nav=document.querySelector('.line-sidebar');if(!nav)return;
+var list=nav.querySelector('.line-sidebar__list');
+var items=[].slice.call(nav.querySelectorAll('.line-sidebar__item'));
+var active=parseInt(nav.dataset.active),radius=+nav.dataset.radius||120,tau=0.1;
+var targets=items.map(function(){return 0;}),cur=items.map(function(){return 0;}),raf=null,last=0;
+function frame(now){var dt=Math.min((now-last)/1000,0.05);last=now;var k=1-Math.exp(-dt/tau);var moving=false;
+for(var i=0;i<items.length;i++){var t=Math.max(targets[i],active===i?1:0);var c=cur[i];var nx=c+(t-c)*k;
+var s=Math.abs(t-nx)<0.0015;var v=s?t:nx;cur[i]=v;items[i].style.setProperty('--effect',v.toFixed(4));if(!s)moving=true;}
+raf=moving?requestAnimationFrame(frame):null;}
+function start(){if(raf!=null)return;last=performance.now();raf=requestAnimationFrame(frame);}
+function smooth(p){return p*p*(3-2*p);}
+list.addEventListener('pointermove',function(e){var r=list.getBoundingClientRect();var y=e.clientY-r.top;
+for(var i=0;i<items.length;i++){var el=items[i];var cn=el.offsetTop+el.offsetHeight/2;
+targets[i]=smooth(Math.max(0,1-Math.abs(y-cn)/radius));}start();});
+list.addEventListener('pointerleave',function(){targets=targets.map(function(){return 0;});start();});
+start();})();
+</script>"""
+
 
 def page(title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
@@ -541,7 +584,7 @@ def page(title, body, active="dashboard", q=""):
             f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
-            f"</div></div>{NOTIF_JS}</html>").encode()
+            f"</div></div>{NOTIF_JS}{SIDEBAR_JS}</html>").encode()
 
 
 def stars(avg):
@@ -1094,7 +1137,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 /* premium glass card — ~80% transparent fill */
 .glass{position:relative;width:100%;max-width:410px;padding:46px 40px 40px;
   border-radius:26px;overflow:hidden;
-  background:linear-gradient(150deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  background:rgba(255,255,255,0);
   backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.28);
   box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 -1px 0 rgba(255,255,255,.08) inset,
