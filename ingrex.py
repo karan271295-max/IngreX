@@ -38,6 +38,23 @@ DOC_TYPES = ["COA", "MSDS", "Spec Sheet", "GMP", "FSSAI", "ISO 22000",
 VENDOR_KINDS = ["Manufacturer", "Trader", "Importer"]
 BUSINESS_ROLES = ["Contract Manufacturer", "Brand / Client", "Raw Material Manufacturer",
                   "Trader", "Importer", "Distributor"]
+# Only buyers (those purchasing from suppliers) may review suppliers.
+BUYER_ROLES = {"Contract Manufacturer", "Brand / Client", "Distributor"}
+
+# Inferred material make / origin, shown on the ingredient page.
+MATERIAL_MAKE = {
+    "Herbal Extract": "Plant-derived (botanical extract)",
+    "Vitamin & Mineral": "Synthetic / mineral source",
+    "Protein": "Plant, dairy or animal-derived",
+    "Dairy": "Milk-derived",
+    "Oil & Lipid": "Plant / marine-derived",
+    "Amino Acid": "Fermentation / synthetic",
+    "Probiotic & Enzyme": "Fermentation-derived",
+    "Sweetener & Fibre": "Plant-derived / synthetic",
+    "Flavour & Colour": "Nature-identical / synthetic",
+    "Excipient": "Mineral / synthetic (pharma grade)",
+    "Powder & Flour": "Plant-derived (milled)",
+}
 
 SCHEMA = """
 CREATE TABLE ingredient (
@@ -628,8 +645,8 @@ NAV = [
     ("Dashboard", "/", "dashboard", "M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z"),
     ("Search Ingredients", "/search", "search", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"),
     ("Suppliers", "/vendors", "suppliers", "M3 21V8l9-5 9 5v13M9 21v-6h6v6"),
-    ("Market Insights", None, "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
-    ("My Reviews", None, "reviews", "M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.6 9.8l6.5-.9z"),
+    ("Market Insights", "/insights", "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
+    ("My Reviews", "/reviews", "reviews", "M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.6 9.8l6.5-.9z"),
     ("Documents", None, "docs", "M14 3H6v18h12V7zM14 3v4h4"),
     ("Watchlist", "/watchlist", "watch", "M20.8 6a5.5 5.5 0 0 0-9-1.7L12 5l.2-.7A5.5 5.5 0 1 0 4 12l8 8 8-8a5.5 5.5 0 0 0 .8-6z"),
 ]
@@ -1273,6 +1290,89 @@ def view_admin(con):
     return page("Admin", body, active="admin")
 
 
+def view_myreviews(con):
+    ident = current()
+    prof = (con.execute("SELECT name FROM profile WHERE code=?", (ident["code"],)).fetchone()
+            if ident else None)
+    name = prof["name"] if prof and prof["name"] else (ident["note"] if ident else "Anonymous")
+    rows = con.execute("""
+        SELECT r.*, v.id vid, v.name vname FROM rating r JOIN vendor v ON v.id=r.vendor_id
+        WHERE r.rater=? ORDER BY r.id DESC""", (name,)).fetchall()
+    cards = "".join(
+        f"""<div class=review>
+          <a href='/vendor/{r['vid']}'><b>{E(r['vname'])}</b></a> {stars(r['score'])}
+          <div class=metaline style='margin-top:6px'>{E(r['note'] or '')}</div>
+          <div class=count style='margin-top:4px'>{E(r['created'] or '')}</div></div>"""
+        for r in rows)
+    inner = cards or ("<div class='panel pad'><p class=empty>You haven't reviewed any suppliers yet. "
+                      "Open a supplier and rate them from their page.</p></div>")
+    body = f"""
+      <div class=hi><h1>My reviews</h1>
+        <div class=sub>Ratings you've posted, as {E(name)}.</div></div>{inner}"""
+    return page("My reviews", body, active="reviews")
+
+
+def view_insights(con):
+    movers = market_movers(con, 200)
+    rises = [m for m in sorted(movers, key=lambda m: m["pct"], reverse=True) if m["pct"] > 0][:6]
+    falls = [m for m in sorted(movers, key=lambda m: m["pct"]) if m["pct"] < 0][:6]
+    cats = con.execute("""
+        SELECT i.category, COUNT(DISTINCT i.id) n, MIN(o.price_min) lo, MAX(o.price_max) hi
+        FROM ingredient i LEFT JOIN offer o ON o.ingredient_id=i.id
+        GROUP BY i.category ORDER BY n DESC""").fetchall()
+    kinds = {r["kind"]: r["n"] for r in
+             con.execute("SELECT kind, COUNT(*) n FROM vendor GROUP BY kind")}
+    avg_mv = sum(m["pct"] for m in movers) / len(movers) if movers else 0
+
+    def mlist(items, up):
+        if not items:
+            return "<p class=empty>No movement.</p>"
+        return "".join(
+            f"<a class=mover href='/ingredient/{m['id']}'>"
+            f"<span><span class=nm>{E(m['name'])}</span>"
+            f"<div class=pr>₹{m['price']:,.0f}/{E(m['unit'])}</div></span>"
+            f"<span class='pc {'up' if up else 'down'}'>{'▲' if up else '▼'} "
+            f"{abs(m['pct']):.1f}%</span></a>" for m in items)
+
+    def cat_row(c):
+        rng = f"₹{c['lo']:,.0f}–{c['hi']:,.0f}" if c["lo"] else "—"
+        return (f"<tr><td><b>{E(c['category'])}</b></td><td>{c['n']}</td>"
+                f"<td>{rng}</td></tr>")
+    cat_rows = "".join(cat_row(c) for c in cats)
+
+    body = f"""
+      <div class=hi><h1>Market insights</h1>
+        <div class=sub>Where nutraceutical ingredient prices are heading across the catalogue.</div></div>
+      <div class=stats>
+        <div class=stat><div class=l>Ingredients</div><div class=v>{sum(c['n'] for c in cats)}</div>
+          <div class=d>across {len(cats)} categories</div></div>
+        <div class=stat><div class=l>Suppliers</div><div class=v>{sum(kinds.values())}</div>
+          <div class=d><b>{kinds.get('Manufacturer', 0)}</b> mfrs · {kinds.get('Trader', 0)} traders · {kinds.get('Importer', 0)} importers</div></div>
+        <div class=stat><div class=l>Avg 12-mo move</div>
+          <div class=v><span class={'up' if avg_mv >= 0 else 'down'}>{'+' if avg_mv >= 0 else ''}{avg_mv:.1f}%</span></div>
+          <div class=d>across priced items</div></div>
+        <div class=stat><div class=l>Categories</div><div class=v>{len(cats)}</div>
+          <div class=d>ingredient groups</div></div>
+      </div>
+      <div class=duo>
+        <div class='panel pad'>
+          <div class=ph><h3>Prices rising</h3><span class=count>watch these</span></div>
+          <div class=metaline style='margin-bottom:6px'>Biggest 12-month increases.</div>
+          {mlist(rises, True)}</div>
+        <div class='panel pad'>
+          <div class=ph><h3>Prices easing</h3><span class=count>buy opportunities</span></div>
+          <div class=metaline style='margin-bottom:6px'>Biggest 12-month decreases.</div>
+          {mlist(falls, False)}</div>
+      </div>
+      <div class='panel pad'>
+        <div class=ph><h3>Category overview</h3></div>
+        <div class=tablewrap style='margin-top:12px'><table>
+          <thead><tr><th>Category</th><th>Ingredients</th><th>Price range</th></tr></thead>
+          <tbody>{cat_rows}</tbody></table></div>
+      </div>"""
+    return page("Market insights", body, active="insights")
+
+
 def view_ingredient(con, ing_id, wl=frozenset()):
     ing = con.execute("SELECT * FROM ingredient WHERE id=?", (ing_id,)).fetchone()
     if not ing:
@@ -1293,7 +1393,12 @@ def view_ingredient(con, ing_id, wl=frozenset()):
            if trend and trend[0]["price"] else None)
     pct_html = (f"<span class={'up' if pct >= 0 else 'down'}>{'+' if pct >= 0 else ''}{pct:.1f}%</span>"
                 if pct is not None else "—")
+    make = MATERIAL_MAKE.get(ing["category"], "Supplier-specified")
     facts = f"""<div class=facts>
+      <div class=fact><span class=fl>Make / origin</span>
+        <span class=fv style='font-weight:600;font-size:11.5px;text-align:right'>{E(make)}</span></div>
+      <div class=fact><span class=fl>Category</span>
+        <span class=fv style='font-weight:600;font-size:11.5px'>{E(ing['category'])}</span></div>
       <div class=fact><span class=fl>Price range</span>
         <span class=fv>{'₹%s–%s' % (f"{cheapest:,.0f}", f"{dearest:,.0f}") if cheapest else '—'}
         <span class=funit>/{E(ing['unit'])}</span></span></div>
@@ -1460,15 +1565,20 @@ def view_vendor(con, vid, msg=""):
       <h2>Rate this vendor</h2>
       <div class=card>
         {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
-        <div class=metaline style='margin-top:0;margin-bottom:12px'>
-          Posting as <b style='color:var(--ink)'>{E(rater_as)}</b> — verified from your account.</div>
-        <form class=filters method=post action='/rate'>
-          <input type=hidden name=vendor_id value='{vid}'>
-          <select name=score aria-label='Star rating'>
-            {"".join(f"<option value={s}>{'★' * s}{'☆' * (5 - s)}  ({s})</option>" for s in (5, 4, 3, 2, 1))}</select>
-          <input name=note placeholder='Remarks — quality, docs, lead time…' maxlength=500 style='flex:1'>
-          <button>Submit rating</button>
-        </form></div>
+        {(
+          f"<div class=metaline style='margin-top:0;margin-bottom:12px'>"
+          f"Posting as <b style='color:var(--ink)'>{E(rater_as)}</b> — verified from your account.</div>"
+          f"<form class=filters method=post action='/rate'>"
+          f"<input type=hidden name=vendor_id value='{vid}'>"
+          f"<select name=score aria-label='Star rating'>"
+          + "".join(f"<option value={s}>{'★' * s}{'☆' * (5 - s)}  ({s})</option>" for s in (5, 4, 3, 2, 1))
+          + "</select>"
+          f"<input name=note placeholder='Remarks — quality, docs, lead time…' maxlength=500 style='flex:1'>"
+          f"<button>Submit rating</button></form>"
+         ) if can_review(con) else
+         "<p class=metaline style='margin:0'>Reviews are for buyers — contract manufacturers, "
+         "brands and distributors purchasing from suppliers. Your account isn't set up to review.</p>"}
+      </div>
       <h2>Reviews</h2>{revs}""", active="suppliers")
 
 
@@ -1480,6 +1590,8 @@ def post_rate(con, body):
     except ValueError:
         return None, "Bad rating input."
     note = f.get("note", [""])[0].strip()[:500]
+    if not can_review(con):
+        return vid or None, "Only buyers (contract manufacturers, brands, distributors) can review."
     if not (1 <= score <= 5):
         return vid or None, "Pick a star rating (1-5)."
     if not con.execute("SELECT 1 FROM vendor WHERE id=?", (vid,)).fetchone():
@@ -1621,6 +1733,21 @@ def is_admin():
 def profile_done(con, code):
     r = con.execute("SELECT completed FROM profile WHERE code=?", (code,)).fetchone()
     return bool(r and r["completed"])
+
+
+def current_role(con):
+    ident = current()
+    if not ident:
+        return None
+    r = con.execute("SELECT role FROM profile WHERE code=?", (ident["code"],)).fetchone()
+    return r["role"] if r else None
+
+
+def can_review(con):
+    """Reviews are for buyers (contract manufacturers, brands, distributors). Admin always."""
+    if not gate_active(con) or is_admin():   # open dev mode, or admin
+        return True
+    return current_role(con) in BUYER_ROLES
 
 
 LOGIN_CSS = """
@@ -1915,6 +2042,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out = view_watchlist(con, wl)
             elif url.path == "/vendors":
                 out = view_vendors(con, params.get("q", [""])[0])
+            elif url.path == "/insights":
+                out = view_insights(con)
+            elif url.path == "/reviews":
+                out = view_myreviews(con)
             elif url.path == "/admin":
                 out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
@@ -2086,6 +2217,11 @@ def demo():
     assert b"Good " in view_dashboard(con) and b"stat" in view_dashboard(con)
     assert view_vendors(con)
 
+    # new pages render; ingredient shows material make
+    assert view_insights(con) and b"Market insights" in view_insights(con)
+    assert view_myreviews(con)
+    assert b"Make / origin" in view_ingredient(con, 1)
+
     # market movers + notifications feed derive from real price history
     mv = market_movers(con)
     assert mv and all("pct" in m for m in mv)
@@ -2140,6 +2276,22 @@ def demo():
                       "gst": "123456789012345", "city": "Pune"}).split(";")[0]
     assert read_prof({"Cookie": pc})["company"] == "Acme"
     assert read_prof({"Cookie": "prof=tampered.0000"}) is None
+
+    # reviews are buyer-only (sellers can't review) when the gate is active
+    con.execute("INSERT INTO invite(code,note,created) VALUES('BUY1','X',?)", (date.today().isoformat(),))
+    con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,completed,created)"
+                " VALUES('BUY1','X','Y','Trader','g','c',1,'d')")
+    con.commit()
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUY1.{sign_code('BUY1')}"})
+    assert gate_active(con) and can_review(con) is False, "seller cannot review"
+    con.execute("UPDATE profile SET role='Brand / Client' WHERE code='BUY1'")
+    con.commit()
+    assert can_review(con) is True, "buyer can review"
+    assert post_rate(con, "vendor_id=1&score=5&note=ok")[0] == 1, "buyer post accepted"
+    CTX.ident = None
+    con.execute("DELETE FROM invite WHERE code='BUY1'")
+    con.execute("DELETE FROM profile WHERE code='BUY1'")
+    con.commit()
 
     # kick: remove-active-user logic revokes code + drops presence
     ONLINE.clear()
