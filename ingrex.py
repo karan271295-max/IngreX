@@ -273,15 +273,58 @@ p{margin:0 0 12px}
   box-shadow:0 0 0 0 rgba(13,122,86,.5);animation:pulse 2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,122,86,.5)}
   70%{box-shadow:0 0 0 7px rgba(13,122,86,0)}100%{box-shadow:0 0 0 0 rgba(13,122,86,0)}}
-.top .ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
-  background:#fff;border:1px solid var(--line);position:relative;color:var(--mut)}
-.top .ico .dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;
+/* notifications dropdown (native details) */
+.notif{position:relative}
+.notif summary{list-style:none;cursor:pointer;width:40px;height:40px;border-radius:11px;
+  display:grid;place-items:center;background:#fff;border:1px solid var(--line);color:var(--mut);
+  position:relative}
+.notif summary::-webkit-details-marker{display:none}
+.notif summary:hover{border-color:#cfe0d7;color:var(--acc-d)}
+.notif[open] summary{border-color:var(--acc);color:var(--acc-d)}
+.notif .dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 5px;
   border-radius:20px;background:var(--acc);color:#fff;font-size:10px;font-weight:700;
   display:grid;place-items:center}
+.notif .menu{position:absolute;top:48px;right:0;width:320px;max-height:70vh;overflow:auto;
+  background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 50px -16px rgba(15,31,26,.3);
+  z-index:30;padding:6px}
+.mhead{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--mut);padding:10px 12px 6px}
+.nitem{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border-radius:10px;color:inherit}
+.nitem:hover{background:var(--line2)}
+.nmark{flex:none;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+  font-size:12px;font-weight:700}
+.nmark.up{background:#fbe9df;color:var(--up)}.nmark.down{background:var(--acc-t);color:var(--acc-d)}
+.nmark.star{background:#fbf1d8;color:var(--gold)}
+.ntext{min-width:0}.ntext b{color:var(--ink);font-size:13px;display:block;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nsub{color:var(--mut);font-size:12px;display:block;line-height:1.35}
+.nempty{padding:20px;text-align:center;color:var(--mut);font-size:13px}
+.mfoot{display:block;text-align:center;font-size:12px;font-weight:600;padding:10px;
+  border-top:1px solid var(--line);margin-top:4px}
+
+/* watchlist star on cards */
+.iwrap{position:relative}
+.star{position:absolute;top:10px;right:10px;z-index:2;width:30px;height:30px;border-radius:50%;
+  display:grid;place-items:center;font-size:15px;text-decoration:none;color:#b9c6bf;
+  background:rgba(255,255,255,.92);border:1px solid var(--line);box-shadow:var(--shadow)}
+.star:hover{color:var(--gold);border-color:#f0d9a0}
+.star.on{color:var(--gold);border-color:#f0d9a0;background:#fffdf5}
+
+/* market movers panel */
+.mover{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.mover:last-child{border-bottom:0}
+.mover .nm{font-size:14px;font-weight:700;color:var(--ink)}
+.mover .pc{margin-left:auto;font-weight:700;font-size:14px;display:flex;align-items:center;gap:5px}
+.mover .pr{color:var(--mut);font-size:12px}
 .wrap{padding:26px 28px 60px;max-width:1200px;width:100%}
 .lead{color:var(--mut);font-size:15px;max-width:60ch;margin:-2px 0 22px}
 .back{display:inline-block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:14px}
 .back:hover{color:var(--acc)}
+.titlerow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.wbtn{flex:none;font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;
+  border:1px solid var(--line);background:#fff;color:var(--body);white-space:nowrap;margin-top:4px}
+.wbtn:hover{border-color:#f0d9a0;color:var(--gold)}
+.wbtn.on{background:#fffdf5;border-color:#f0d9a0;color:var(--gold)}
 
 /* dashboard */
 .hi h1{font-size:26px;margin:0 0 4px}
@@ -417,7 +460,7 @@ NAV = [
     ("Market Insights", None, "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
     ("My Reviews", None, "reviews", "M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.6 9.8l6.5-.9z"),
     ("Documents", None, "docs", "M14 3H6v18h12V7zM14 3v4h4"),
-    ("Watchlist", None, "watch", "M20.8 6a5.5 5.5 0 0 0-9-1.7L12 5l.2-.7A5.5 5.5 0 1 0 4 12l8 8 8-8a5.5 5.5 0 0 0 .8-6z"),
+    ("Watchlist", "/watchlist", "watch", "M20.8 6a5.5 5.5 0 0 0-9-1.7L12 5l.2-.7A5.5 5.5 0 1 0 4 12l8 8 8-8a5.5 5.5 0 0 0 .8-6z"),
 ]
 
 
@@ -447,6 +490,23 @@ def sidebar(active):
 
 
 def topbar(q=""):
+    con = connect()
+    try:
+        items = notifications(con)
+    finally:
+        con.close()
+    feed = "".join(
+        f"<a class=nitem href='{it['href']}'>"
+        f"<span class='nmark {it['cls']}'>{it['mark']}</span>"
+        f"<span class=ntext><b>{E(it['title'])}</b><span class=nsub>{E(it['sub'])}</span></span></a>"
+        for it in items) or "<div class=nempty>No activity yet.</div>"
+    bell = (
+        f"<details class=notif><summary title=Notifications>"
+        f"<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2>"
+        f"<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4'/></svg>"
+        f"{f'<span class=dot>{len(items)}</span>' if items else ''}</summary>"
+        f"<div class=menu><div class=mhead>Activity</div>{feed}"
+        f"<a class=mfoot href='/search'>View all ingredients →</a></div></details>")
     return (f"<div class=top>"
             f"<form method=get action='/search'>"
             f"<svg viewBox='0 0 24 24'><circle cx=11 cy=11 r=7/><path d='M21 21l-4.3-4.3'/></svg>"
@@ -454,11 +514,7 @@ def topbar(q=""):
             f"<span class=grow></span>"
             f"<span class=live title='Users active in the last 5 minutes'>"
             f"<span class=pulse></span>{online_count()} online</span>"
-            f"<div class=ico title=Notifications>"
-            f"<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2>"
-            f"<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4'/></svg>"
-            f"<span class=dot>12</span></div>"
-            f"<span class=av>SL</span></div>")
+            f"{bell}<span class=av>SL</span></div>")
 
 
 def page(title, body, active="dashboard", q=""):
@@ -522,16 +578,67 @@ def mono(name):
     return grad, ini
 
 
-def icard(r):
+def icard(r, wl=frozenset(), back="/"):
     grad, ini = mono(r["name"])
     price = (f"₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
              if r["lo"] else "<span class=mut>No offers</span>")
-    return (f"<a class=icard href='/ingredient/{r['id']}'>"
+    on = r["id"] in wl
+    star = (f"<a class='star{' on' if on else ''}' "
+            f"href='/watch?id={r['id']}&back={urllib.parse.quote(back)}' "
+            f"title='{'Remove from' if on else 'Add to'} watchlist' "
+            f"aria-label='toggle watchlist'>{'★' if on else '☆'}</a>")
+    return (f"<div class=iwrap>{star}"
+            f"<a class=icard href='/ingredient/{r['id']}'>"
             f"<div class=mono style='background:linear-gradient(135deg,{grad},{grad}cc)'>{ini}</div>"
             f"<div class=nm>{E(r['name'])}</div>"
             f"<div class=ct>{E(r['category'])}</div>"
             f"<div class=pr>{price}</div>"
-            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s)</div></a>")
+            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s)</div></a></div>")
+
+
+def market_movers(con, limit=6):
+    """Month-over-month market price change per ingredient, biggest first."""
+    rows = con.execute("""
+        SELECT p.ingredient_id id, i.name, i.unit, p.month, p.price
+        FROM price_point p JOIN ingredient i ON i.id=p.ingredient_id
+        ORDER BY p.ingredient_id, p.month""").fetchall()
+    last = {}
+    for r in rows:
+        last.setdefault(r["id"], []).append(r)
+    moves = []
+    for pts in last.values():
+        if len(pts) < 2:
+            continue
+        prev, cur = pts[-2]["price"], pts[-1]["price"]
+        if not prev:
+            continue
+        moves.append({"id": pts[-1]["id"], "name": pts[-1]["name"], "unit": pts[-1]["unit"],
+                      "price": cur, "pct": (cur - prev) / prev * 100})
+    moves.sort(key=lambda m: abs(m["pct"]), reverse=True)
+    return moves[:limit]
+
+
+def notifications(con):
+    """Activity feed for the bell: biggest price moves + newest reviews."""
+    items = []
+    for m in market_movers(con, 3):
+        up = m["pct"] >= 0
+        items.append({
+            "cls": "up" if up else "down",
+            "mark": "▲" if up else "▼",
+            "title": f"{m['name']}",
+            "sub": f"Market price {'up' if up else 'down'} {abs(m['pct']):.1f}% this month",
+            "href": f"/ingredient/{m['id']}"})
+    for r in con.execute("""
+            SELECT r.score, r.rater, r.note, v.id vid, v.name vname
+            FROM rating r JOIN vendor v ON v.id=r.vendor_id
+            ORDER BY r.id DESC LIMIT 4""").fetchall():
+        items.append({
+            "cls": "star", "mark": "★",
+            "title": f"{r['score']}★ · {r['vname']}",
+            "sub": f"{r['rater']}: {(r['note'] or '')[:44]}",
+            "href": f"/vendor/{r['vid']}"})
+    return items
 
 
 def price_chart(points, w=560, h=210):
@@ -662,12 +769,20 @@ def top_suppliers(con, limit=3):
     return out or "<p class=empty>No rated suppliers yet.</p>"
 
 
-def view_dashboard(con):
+def view_dashboard(con, wl=frozenset()):
     rows = search_ingredients(con)
     feat = max(rows, key=lambda r: r["vendors"] or 0)
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
         (feat["id"],)).fetchall()
+    movers = ""
+    for m in market_movers(con):
+        up = m["pct"] >= 0
+        movers += (f"<a class=mover href='/ingredient/{m['id']}'>"
+                   f"<span><span class=nm>{E(m['name'])}</span>"
+                   f"<div class=pr>₹{m['price']:,.0f}/{E(m['unit'])} · this month</div></span>"
+                   f"<span class='pc {'up' if up else 'down'}'>{'▲' if up else '▼'} "
+                   f"{abs(m['pct']):.1f}%</span></a>")
     body = f"""
       <div class=hi><h1>{greeting()}, Karan 👋</h1>
         <div class=sub>Here's what's happening with your sourcing today.</div></div>
@@ -676,7 +791,7 @@ def view_dashboard(con):
         <div class=ph><h3>Find ingredients. Compare. Source smart.</h3>
           <a href='/search'>View all →</a></div>
         {category_pills(con)}
-        <div class=icards>{"".join(icard(r) for r in rows[:10])}</div>
+        <div class=icards>{"".join(icard(r, wl, "/") for r in rows[:10])}</div>
       </div>
       <div class=duo>
         <div class='panel pad'>
@@ -686,14 +801,19 @@ def view_dashboard(con):
           <div class=chartbox>{price_chart([(m['month'], m['price']) for m in trend])}</div>
         </div>
         <div class='panel pad'>
-          <div class=ph><h3>Top rated suppliers</h3><a href='/vendors'>View all →</a></div>
-          {top_suppliers(con)}
+          <div class=ph><h3>Market movers</h3><span class=count>month over month</span></div>
+          <div class=metaline style='margin-bottom:6px'>Biggest market price changes — ▲ up, ▼ down.</div>
+          {movers or "<p class=empty>No price history yet.</p>"}
         </div>
+      </div>
+      <div class='panel pad'>
+        <div class=ph><h3>Top rated suppliers</h3><a href='/vendors'>View all →</a></div>
+        {top_suppliers(con, 5)}
       </div>"""
     return page("Dashboard", body, active="dashboard")
 
 
-def view_search(con, params):
+def view_search(con, params, wl=frozenset()):
     q = params.get("q", [""])[0].strip()
     kind = params.get("kind", [""])[0]
     doc = params.get("doc", [""])[0]
@@ -705,6 +825,9 @@ def view_search(con, params):
         doc = ""
 
     rows = search_ingredients(con, q, kind, doc, maxp)
+    qs = urllib.parse.urlencode({k: v for k, v in
+                                 [("q", q), ("kind", kind), ("doc", doc), ("maxp", raw)] if v})
+    back = "/search" + (f"?{qs}" if qs else "")
     cats = {r["category"] for r in con.execute("SELECT DISTINCT category FROM ingredient")}
     opts = lambda vals, sel, label: (
         f"<option value=''>{label}</option>" +
@@ -722,14 +845,31 @@ def view_search(con, params):
         <button>Search</button>
       </form></div>
       <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
-      <div class=icards>{"".join(icard(r) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
+      <div class=icards>{"".join(icard(r, wl, back) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
     return page("Search", body, active="search", q=q)
 
 
-def view_ingredient(con, ing_id):
+def view_watchlist(con, wl=frozenset()):
+    rows = [r for r in search_ingredients(con) if r["id"] in wl] if wl else []
+    grid = "".join(icard(r, wl, "/watchlist") for r in rows)
+    inner = (f"<div class=icards>{grid}</div>" if grid else
+             "<div class='panel pad'><p class=empty>Nothing here yet — tap the ☆ on any "
+             "ingredient to track its price and vendors on this device.</p></div>")
+    body = f"""
+      <div class=hi><h1>Watchlist</h1>
+        <div class=sub>Ingredients you're tracking on this device.</div></div>
+      {inner}"""
+    return page("Watchlist", body, active="watch")
+
+
+def view_ingredient(con, ing_id, wl=frozenset()):
     ing = con.execute("SELECT * FROM ingredient WHERE id=?", (ing_id,)).fetchone()
     if not ing:
         return None
+    watching = ing_id in wl
+    wbtn = (f"<a class='wbtn{' on' if watching else ''}' "
+            f"href='/watch?id={ing_id}&back=/ingredient/{ing_id}'>"
+            f"{'★ Watching' if watching else '☆ Add to watchlist'}</a>")
     offers = offers_for_ingredient(con, ing_id)
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
@@ -748,7 +888,7 @@ def view_ingredient(con, ing_id):
 
     return page(ing["name"], f"""
       <a class=back href='/'>← Ingredients</a>
-      <h1>{E(ing['name'])}</h1>
+      <div class=titlerow><h1>{E(ing['name'])}</h1>{wbtn}</div>
       <p class=metaline>{E(ing['category'])} · CAS {E(ing['cas'])}</p>
       <div class=chips style='margin:10px 0 18px'>
         {"".join(f"<span class='tag func'>{E(f.strip())}</span>" for f in ing['functions'].split(','))}</div>
@@ -882,6 +1022,23 @@ def online_count():
     now = time.time()
     with ONLINE_LOCK:
         return sum(1 for t in ONLINE.values() if now - t <= ONLINE_WINDOW)
+
+
+# ---------- watchlist (per-device cookie) ----------
+WATCH_COOKIE = "watch"
+
+
+def watched_ids(headers):
+    for part in headers.get("Cookie", "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == WATCH_COOKIE:
+            return {int(x) for x in v.split(".") if x.isdigit()}
+    return set()
+
+
+def safe_back(path):
+    """Only allow same-site relative redirects (no open redirect)."""
+    return path if path.startswith("/") and not path.startswith("//") else "/"
 
 
 # ---------- auth gate ----------
@@ -1052,16 +1209,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._redirect("/login")
         xff = self.headers.get("X-Forwarded-For", "")
         touch_online(xff.split(",")[0].strip() or self.client_address[0])
+        wl = watched_ids(self.headers)
+        if url.path == "/watch":
+            iid = int(params.get("id", ["0"])[0]) if params.get("id", ["0"])[0].isdigit() else 0
+            if iid:
+                wl.symmetric_difference_update({iid})   # toggle membership
+            val = ".".join(str(i) for i in sorted(wl))
+            cookie = (f"{WATCH_COOKIE}={val}; Max-Age=15552000; "
+                      "Path=/; HttpOnly; SameSite=Lax; Secure")
+            return self._redirect(safe_back(params.get("back", ["/"])[0]), cookie)
         con = connect()
         try:
             if url.path == "/":
-                out = view_dashboard(con)
+                out = view_dashboard(con, wl)
             elif url.path == "/search":
-                out = view_search(con, params)
+                out = view_search(con, params, wl)
+            elif url.path == "/watchlist":
+                out = view_watchlist(con, wl)
             elif url.path == "/vendors":
                 out = view_vendors(con)
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
-                out = view_ingredient(con, int(m[1]))
+                out = view_ingredient(con, int(m[1]), wl)
             elif m := re.fullmatch(r"/vendor/(\d+)", url.path):
                 out = view_vendor(con, int(m[1]), params.get("msg", [""])[0][:80])
             else:
@@ -1161,6 +1329,22 @@ def demo():
     assert view_search(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
     assert b"Good " in view_dashboard(con) and b"stat" in view_dashboard(con)
     assert view_vendors(con)
+
+    # market movers + notifications feed derive from real price history
+    mv = market_movers(con)
+    assert mv and all("pct" in m for m in mv)
+    assert mv == sorted(mv, key=lambda m: abs(m["pct"]), reverse=True), "sorted by move size"
+    assert notifications(con), "activity feed non-empty"
+
+    # watchlist: cookie parse, toggle rendering, no open redirect
+    assert watched_ids({"Cookie": "watch=1.3.5"}) == {1, 3, 5}
+    assert watched_ids({"Cookie": "other=x"}) == set() and watched_ids({}) == set()
+    assert safe_back("/search?q=x") == "/search?q=x"
+    assert safe_back("//evil.com") == "/" and safe_back("http://x") == "/"
+    assert b"class='star on'" in view_dashboard(con, {1}), "watched card shows filled star"
+    assert b"class='star on'" not in view_dashboard(con, set())
+    assert b"Watching" in view_ingredient(con, 1, {1})
+    assert view_watchlist(con, {1, 2}) and view_watchlist(con, set())
 
     # auth gate: token unforgeable, cookie round-trips, gate off when no pw
     global AUTH_PW, AUTH_SECRET
