@@ -40,6 +40,7 @@ BUSINESS_ROLES = ["Contract Manufacturer", "Brand / Client", "Raw Material Manuf
                   "Trader", "Importer", "Distributor"]
 # Only buyers (those purchasing from suppliers) may review suppliers.
 BUYER_ROLES = {"Contract Manufacturer", "Brand / Client", "Distributor"}
+REQUEST_STATUS = ["Open", "In progress", "Sourcing vendor", "Fulfilled", "Closed"]
 
 # Inferred material make / origin, shown on the ingredient page.
 MATERIAL_MAKE = {
@@ -247,6 +248,10 @@ def ensure_invites(con):
     con.execute("""CREATE TABLE IF NOT EXISTS profile(
         code TEXT PRIMARY KEY, name TEXT, company TEXT, role TEXT,
         gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS request(
+        id INTEGER PRIMARY KEY, code TEXT, requester TEXT, company TEXT,
+        ingredient TEXT NOT NULL, details TEXT, status TEXT DEFAULT 'Open',
+        reply TEXT, created TEXT, updated TEXT)""")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
@@ -614,6 +619,13 @@ button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
 .review{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;
   background:var(--card);box-shadow:var(--shadow)}
 .review b{color:var(--ink)}
+.sbadge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.02em}
+.st-open{background:#fbeede;color:#a86a12}
+.st-prog{background:#e7edff;color:#1b47c4}
+.st-done{background:var(--acc-t);color:var(--acc-d)}
+.st-closed{background:var(--line2);color:var(--mut)}
+.rreply{margin-top:8px;padding:9px 12px;background:var(--acc-t);border-radius:9px;
+  font-size:12.5px;color:var(--ink)}.rreply b{color:var(--acc-d)}
 .empty{color:var(--mut);padding:26px 0;text-align:center}
 .count{color:var(--mut);font-weight:600;font-size:13px}
 .cline{display:flex;gap:14px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:14px}
@@ -647,6 +659,7 @@ NAV = [
     ("Suppliers", "/vendors", "suppliers", "M3 21V8l9-5 9 5v13M9 21v-6h6v6"),
     ("Market Insights", "/insights", "insights", "M4 19V5m0 14h16M8 15l3-4 3 2 4-6"),
     ("My Reviews", "/reviews", "reviews", "M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 18l-5.8 3 1.1-6.5L2.6 9.8l6.5-.9z"),
+    ("Sourcing Requests", "/requests", "requests", "M9 12h6M9 16h6M9 8h6M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"),
     ("Documents", None, "docs", "M14 3H6v18h12V7zM14 3v4h4"),
     ("Watchlist", "/watchlist", "watch", "M20.8 6a5.5 5.5 0 0 0-9-1.7L12 5l.2-.7A5.5 5.5 0 1 0 4 12l8 8 8-8a5.5 5.5 0 0 0 .8-6z"),
 ]
@@ -1178,7 +1191,13 @@ def view_search(con, params, wl=frozenset()):
         <button>Search</button>
       </form></div>
       <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
-      <div class=icards>{"".join(icard(r, wl, back, mv) for r in rows) or "<p class=empty>Nothing matched those filters.</p>"}</div>"""
+      <div class=icards>{"".join(icard(r, wl, back, mv) for r in rows)}</div>
+      {("" if rows else
+        f"<div class='panel pad' style='text-align:center'>"
+        f"<p style='margin:0 0 10px'>No match for that search.</p>"
+        f"<p class=metaline style='margin:0 0 14px'>Looking for an ingredient not on Ingrex? "
+        f"Raise a sourcing request and our purchase team will find a supplier for you.</p>"
+        f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>")}"""
     return page("Search", body, active="search", q=q)
 
 
@@ -1220,6 +1239,24 @@ def view_admin(con):
     admin_code = next((iv["code"] for iv in invites if iv["is_admin"]), "")
     env_invites = ",".join(f"{iv['code']}:{(iv['note'] or 'Invitee').replace(',', ' ')}"
                            for iv in invites if not iv["is_admin"] and not iv["revoked"])
+    reqs = con.execute("SELECT * FROM request ORDER BY (status='Open') DESC, id DESC").fetchall()
+    open_reqs = sum(1 for r in reqs if r["status"] == "Open")
+    req_rows = ""
+    for r in reqs:
+        opts = "".join(f"<option{' selected' if r['status'] == s else ''}>{s}</option>"
+                       for s in REQUEST_STATUS)
+        req_rows += f"""<div class=review>
+          <div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'>
+            <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}</div>
+          <div class=metaline style='margin-top:4px'>{E(r['requester'] or '')}
+            {f"· {E(r['company'])}" if r['company'] else ''} · raised {E(r['created'] or '')}</div>
+          {f"<div class=metaline style='margin-top:6px;color:var(--ink)'>{E(r['details'])}</div>" if r['details'] else ""}
+          <form method=post action='/admin/request' class=filters style='margin-top:10px'>
+            <input type=hidden name=id value='{r['id']}'>
+            <select name=status>{opts}</select>
+            <input name=reply value='{E(r['reply'] or '')}'
+              placeholder='Update for the requester…' maxlength=400 style='flex:1;min-width:200px'>
+            <button>Update</button></form></div>"""
     inv_rows = ""
     for iv in invites:
         status = ("<span class='tag kind Trader'>admin</span>" if iv["is_admin"]
@@ -1236,7 +1273,14 @@ def view_admin(con):
 
     body = f"""
       <div class=hi><h1>Admin</h1>
-        <div class=sub>Manage invites and see who's using the pilot right now.</div></div>
+        <div class=sub>Manage sourcing requests, invites and see who's using the pilot right now.</div></div>
+      <div class='panel pad'>
+        <div class=ph><h3>Sourcing requests</h3>
+          <span class=count>{open_reqs} open · {len(reqs)} total</span></div>
+        <div class=metaline style='margin:8px 0 14px'>Buyer requests for ingredients not yet on Ingrex.
+          Set a status and reply — the requester sees it on their Requests page.</div>
+        {req_rows or "<p class=empty>No sourcing requests yet.</p>"}
+      </div>
       <div class='panel pad'>
         <div class=ph><h3>Online now</h3><span class=count>{len(who)} active · last 5 min</span></div>
         <div class=tablewrap style='margin-top:14px'><table>
@@ -1310,6 +1354,61 @@ def view_myreviews(con):
       <div class=hi><h1>My reviews</h1>
         <div class=sub>Ratings you've posted, as {E(name)}.</div></div>{inner}"""
     return page("My reviews", body, active="reviews")
+
+
+def status_badge(s):
+    cls = {"Open": "st-open", "In progress": "st-prog", "Sourcing vendor": "st-prog",
+           "Fulfilled": "st-done", "Closed": "st-closed"}.get(s, "st-open")
+    return f"<span class='sbadge {cls}'>{E(s)}</span>"
+
+
+def requester_identity(con):
+    ident = current()
+    prof = (con.execute("SELECT name,company FROM profile WHERE code=?",
+                        (ident["code"],)).fetchone() if ident else None)
+    name = prof["name"] if prof and prof["name"] else (ident["note"] if ident else "You")
+    company = prof["company"] if prof and prof["company"] else ""
+    code = ident["code"] if ident else ""
+    return code, name, company
+
+
+def view_requests(con, prefill="", msg=""):
+    code, name, company = requester_identity(con)
+    mine = con.execute(
+        "SELECT * FROM request WHERE code=? OR requester=? ORDER BY id DESC",
+        (code, name)).fetchall()
+    rows = "".join(
+        f"""<div class=review>
+          <div style='display:flex;align-items:center;gap:10px'>
+            <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}</div>
+          {f"<div class=metaline style='margin-top:6px'>{E(r['details'])}</div>" if r['details'] else ""}
+          {f"<div class=rreply><b>Purchase team:</b> {E(r['reply'])}</div>" if r['reply'] else ""}
+          <div class=count style='margin-top:6px'>Raised {E(r['created'] or '')}</div></div>"""
+        for r in mine)
+    body = f"""
+      <div class=hi><h1>Sourcing requests</h1>
+        <div class=sub>Can't find an ingredient on Ingrex? Raise a request — our purchase team
+          sources a supplier, has them submit a quote, and updates you here.</div></div>
+      <div class='panel pad' style='margin-bottom:16px'>
+        {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
+        <form method=post action='/requests'>
+          <div class=f style='margin-bottom:10px'>
+            <label style='font-size:11px;font-weight:650;color:var(--mut)'>Ingredient you need</label>
+            <input name=ingredient required maxlength=140 value='{E(prefill)}'
+              placeholder='e.g. Organic Ashwagandha Root Extract 10% Withanolides' style='width:100%'></div>
+          <div class=f style='margin-bottom:12px'>
+            <label style='font-size:11px;font-weight:650;color:var(--mut)'>Specs, quantity, target price (optional)</label>
+            <textarea name=details maxlength=800 rows=3
+              placeholder='Grade / assay, monthly quantity, target ₹/kg, certifications needed…'
+              style='width:100%'></textarea></div>
+          <button>Submit request</button>
+        </form>
+        <div class=metaline style='margin-top:10px'>Raising as
+          <b style='color:var(--ink)'>{E(name)}{f' · {E(company)}' if company else ''}</b>.</div>
+      </div>
+      <h2>Your requests ({len(mine)})</h2>
+      {rows or "<div class='panel pad'><p class=empty>No requests yet.</p></div>"}"""
+    return page("Sourcing requests", body, active="requests")
 
 
 def view_insights(con):
@@ -2046,6 +2145,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out = view_insights(con)
             elif url.path == "/reviews":
                 out = view_myreviews(con)
+            elif url.path == "/requests":
+                out = view_requests(con, params.get("ing", [""])[0][:140],
+                                    params.get("msg", [""])[0][:80])
             elif url.path == "/admin":
                 out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
@@ -2098,7 +2200,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("UPDATE invite SET note=? WHERE code=?", (d["name"], ident["code"]))
                 con.commit()
                 return self._redirect("/", prof_cookie(d))   # survives DB resets
+            if path == "/requests":
+                f = urllib.parse.parse_qs(body)
+                ingredient = f.get("ingredient", [""])[0].strip()[:140]
+                details = f.get("details", [""])[0].strip()[:800]
+                if not ingredient:
+                    return self._redirect("/requests")
+                code, name, company = requester_identity(con)
+                con.execute("INSERT INTO request(code,requester,company,ingredient,details,"
+                            "status,created,updated) VALUES(?,?,?,?,?,'Open',?,?)",
+                            (code, name, company, ingredient, details,
+                             date.today().isoformat(), date.today().isoformat()))
+                con.commit()
+                return self._redirect(
+                    "/requests?msg=" + urllib.parse.quote("Request submitted — the purchase team will update you here."))
             admin = is_admin() or not gated
+            if path == "/admin/request" and admin:
+                f = urllib.parse.parse_qs(body)
+                rid = f.get("id", ["0"])[0]
+                status = f.get("status", [""])[0]
+                reply = f.get("reply", [""])[0].strip()[:400]
+                if status in REQUEST_STATUS:
+                    con.execute("UPDATE request SET status=?, reply=?, updated=? WHERE id=?",
+                                (status, reply, date.today().isoformat(), rid))
+                    con.commit()
+                return self._redirect("/admin")
             if path == "/rate":
                 vid, msg = post_rate(con, body)
                 return self._redirect(
@@ -2221,6 +2347,19 @@ def demo():
     assert view_insights(con) and b"Market insights" in view_insights(con)
     assert view_myreviews(con)
     assert b"Make / origin" in view_ingredient(con, 1)
+
+    # sourcing requests: raise + it appears for the requester and admin
+    con.execute("INSERT INTO request(code,requester,company,ingredient,details,status,created,updated)"
+                " VALUES('','Anonymous','','Rare Mushroom Extract','2% beta-glucan','Open','d','d')")
+    con.commit()
+    assert b"Rare Mushroom Extract" in view_requests(con)
+    assert b"Rare Mushroom Extract" in view_admin(con)
+    con.execute("UPDATE request SET status='Fulfilled', reply='Found a vendor' "
+                "WHERE ingredient='Rare Mushroom Extract'")
+    con.commit()
+    assert b"Fulfilled" in view_requests(con) and b"Found a vendor" in view_requests(con)
+    con.execute("DELETE FROM request")
+    con.commit()
 
     # market movers + notifications feed derive from real price history
     mv = market_movers(con)
