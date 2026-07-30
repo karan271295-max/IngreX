@@ -493,15 +493,18 @@ def topbar(q=""):
     con = connect()
     try:
         items = notifications(con)
+        s = con.execute("SELECT (SELECT COALESCE(MAX(id),0) FROM rating) r,"
+                        " (SELECT COALESCE(MAX(month),'') FROM price_point) m").fetchone()
     finally:
         con.close()
+    sig = f"{s['r']}-{s['m']}"   # changes when a new review or price month lands
     feed = "".join(
         f"<a class=nitem href='{it['href']}'>"
         f"<span class='nmark {it['cls']}'>{it['mark']}</span>"
         f"<span class=ntext><b>{E(it['title'])}</b><span class=nsub>{E(it['sub'])}</span></span></a>"
         for it in items) or "<div class=nempty>No activity yet.</div>"
     bell = (
-        f"<details class=notif><summary title=Notifications>"
+        f"<details class=notif data-sig='{sig}'><summary title=Notifications>"
         f"<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2>"
         f"<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4'/></svg>"
         f"{f'<span class=dot>{len(items)}</span>' if items else ''}</summary>"
@@ -517,6 +520,19 @@ def topbar(q=""):
             f"{bell}<span class=av>SL</span></div>")
 
 
+# Badge = unread. Hidden once this device has "seen" the current activity
+# signature; opening the bell marks it seen (per-device cookie, 1 year).
+NOTIF_JS = """<script>
+(function(){var n=document.querySelector('.notif');if(!n)return;
+var sig=n.dataset.sig,m=document.cookie.match(/(?:^|; )seen=([^;]*)/),
+seen=m?decodeURIComponent(m[1]):'',dot=n.querySelector('.dot');
+if(seen===sig&&dot)dot.remove();
+n.addEventListener('toggle',function(e){if(e.target.open){
+document.cookie='seen='+encodeURIComponent(sig)+';path=/;max-age=31536000;samesite=lax';
+var d=n.querySelector('.dot');if(d)d.remove();}});})();
+</script>"""
+
+
 def page(title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -525,7 +541,7 @@ def page(title, body, active="dashboard", q=""):
             f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
-            f"</div></div></html>").encode()
+            f"</div></div>{NOTIF_JS}</html>").encode()
 
 
 def stars(avg):
@@ -582,6 +598,7 @@ def icard(r, wl=frozenset(), back="/"):
     grad, ini = mono(r["name"])
     price = (f"₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
              if r["lo"] else "<span class=mut>No offers</span>")
+    upd = f" · upd {E(r['updated'])}" if r["updated"] else ""
     on = r["id"] in wl
     star = (f"<a class='star{' on' if on else ''}' "
             f"href='/watch?id={r['id']}&back={urllib.parse.quote(back)}' "
@@ -593,7 +610,7 @@ def icard(r, wl=frozenset(), back="/"):
             f"<div class=nm>{E(r['name'])}</div>"
             f"<div class=ct>{E(r['category'])}</div>"
             f"<div class=pr>{price}</div>"
-            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s)</div></a></div>")
+            f"<div class=ct style='margin-top:4px'>{r['vendors']} vendor(s){upd}</div></a></div>")
 
 
 def market_movers(con, limit=6):
@@ -683,7 +700,7 @@ def price_chart(points, w=560, h=210):
 def search_ingredients(con, q="", kind="", doc="", maxp=None):
     sql = """
     SELECT i.*, COUNT(DISTINCT o.vendor_id) vendors,
-           MIN(o.price_min) lo, MAX(o.price_max) hi
+           MIN(o.price_min) lo, MAX(o.price_max) hi, MAX(o.updated) updated
     FROM ingredient i
     LEFT JOIN offer o ON o.ingredient_id = i.id
     LEFT JOIN vendor v ON v.id = o.vendor_id
@@ -884,7 +901,9 @@ def view_ingredient(con, ing_id, wl=frozenset()):
         <td>{E(o['moq'] or '—')}</td>
         <td>{str(o['lead_days']) + ' d' if o['lead_days'] else '—'}</td>
         <td>{stars(o['avg_score'])}<div class=metaline>{o['n_score']} review(s)</div></td>
+        <td class=metaline>{E(o['updated'] or '—')}</td>
         <td><div class=chips>{doc_tags(o['docs'])}</div></td></tr>""" for o in offers)
+    last_upd = max((o["updated"] for o in offers if o["updated"]), default=None)
 
     return page(ing["name"], f"""
       <a class=back href='/'>← Ingredients</a>
@@ -897,11 +916,13 @@ def view_ingredient(con, ing_id, wl=frozenset()):
       <div class=card>{sparkline([(m['month'], m['price']) for m in trend], 560, 90)}
         <div class=metaline style='margin-top:10px'>Monthly average landed price, ₹/{E(ing['unit'])}
         {('· ' + str(trend[0]['month']) + ' → ' + str(trend[-1]['month'])) if trend else ''}</div></div>
-      <h2>{len(offers)} vendor{'' if len(offers) == 1 else 's'}</h2>
+      <div class=ph style='margin:34px 0 12px'>
+        <h2 style='margin:0'>{len(offers)} vendor{'' if len(offers) == 1 else 's'}</h2>
+        {f"<span class=count>Prices last updated {E(last_upd)}</span>" if last_upd else ""}</div>
       <div class=tablewrap><table>
         <thead><tr><th>Vendor</th><th>Type</th><th>Price range</th><th>MOQ</th>
-            <th>Lead</th><th>Rating</th><th>Documents</th></tr></thead>
-        <tbody>{rows or "<tr><td colspan=7 class=empty>No vendors listed yet.</td></tr>"}</tbody>
+            <th>Lead</th><th>Rating</th><th>Updated</th><th>Documents</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan=8 class=empty>No vendors listed yet.</td></tr>"}</tbody>
       </table></div>""", active="search")
 
 
