@@ -4,14 +4,24 @@
 Single file, stdlib only. Run:  python3 ingrex.py   ->  http://localhost:8000
 Self-check:                     python3 ingrex.py --test
 """
+import hashlib
+import hmac
 import html
 import http.server
 import os
 import re
 import sqlite3
 import sys
+import time
 import urllib.parse
 from datetime import date
+
+# Shared pilot gate. Set INGREX_PW in the host env to require a password to
+# enter the site. Unset/empty (local dev, tests) leaves the site open.
+AUTH_PW = os.environ.get("INGREX_PW", "")
+AUTH_SECRET = (os.environ.get("INGREX_SECRET") or AUTH_PW or "dev-insecure").encode()
+COOKIE = "ing_auth"
+COOKIE_MAXAGE = 60 * 60 * 24 * 30  # 30 days
 
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ingrex.db")
 
@@ -480,6 +490,37 @@ def post_rate(con, body):
     return vid, "Thanks - rating recorded."
 
 
+# ---------- auth gate ----------
+
+def auth_token():
+    return hmac.new(AUTH_SECRET, b"pilot-v1", hashlib.sha256).hexdigest()
+
+
+def is_authed(headers):
+    if not AUTH_PW:                      # gate disabled
+        return True
+    want = auth_token()
+    for part in headers.get("Cookie", "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == COOKIE and hmac.compare_digest(v, want):
+            return True
+    return False
+
+
+def login_page(err=""):
+    return page("Sign in", f"""
+      <h1>ingre<span style='color:var(--acc)'>x</span> · pilot access</h1>
+      <p class=mut>This preview is invite-only. Enter the access password your
+         Ingrex contact shared. You'll stay signed in on this device.</p>
+      <div class=card style='max-width:380px'>
+        {f"<p class=up>{E(err)}</p>" if err else ""}
+        <form class=filters method=post action='/login'>
+          <input type=password name=pw placeholder='Access password' required
+                 autofocus style='flex:1' autocomplete=current-password>
+          <button>Enter</button>
+        </form></div>""")
+
+
 # ---------- server ----------
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -492,9 +533,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _redirect(self, target, cookie=None):
+        self.send_response(303)
+        self.send_header("Location", target)
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
+        if url.path == "/login":
+            return self._send(login_page())
+        if not is_authed(self.headers):
+            return self._redirect("/login")
         con = connect()
         try:
             if url.path == "/":
@@ -513,19 +565,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             con.close()
 
     def do_POST(self):
-        if urllib.parse.urlparse(self.path).path != "/rate":
-            return self._send(page("Not found", "<h1>404</h1>"), 404)
+        path = urllib.parse.urlparse(self.path).path
         n = min(int(self.headers.get("Content-Length") or 0), 8192)
         body = self.rfile.read(n).decode("utf-8", "replace")
+
+        if path == "/login":
+            pw = urllib.parse.parse_qs(body).get("pw", [""])[0]
+            if AUTH_PW and hmac.compare_digest(pw, AUTH_PW):
+                cookie = (f"{COOKIE}={auth_token()}; Max-Age={COOKIE_MAXAGE}; "
+                          "Path=/; HttpOnly; SameSite=Lax; Secure")
+                return self._redirect("/", cookie)
+            time.sleep(1)   # ponytail: crude brute-force damper; use a long passphrase
+            return self._send(login_page("Wrong password."), 401)
+
+        if not is_authed(self.headers):
+            return self._redirect("/login")
+        if path != "/rate":
+            return self._send(page("Not found", "<h1>404</h1>"), 404)
         con = connect()
         try:
             vid, msg = post_rate(con, body)
         finally:
             con.close()
-        target = f"/vendor/{vid}?msg={urllib.parse.quote(msg)}" if vid else "/vendors"
-        self.send_response(303)
-        self.send_header("Location", target)
-        self.end_headers()
+        self._redirect(f"/vendor/{vid}?msg={urllib.parse.quote(msg)}" if vid else "/vendors")
 
     def log_message(self, fmt, *a):
         sys.stderr.write("%s %s\n" % (self.address_string(), fmt % a))
@@ -580,6 +642,22 @@ def demo():
     assert view_ingredient(con, 9999) is None and view_vendor(con, 9999) is None
     assert view_home(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
     assert view_vendors(con)
+
+    # auth gate: token unforgeable, cookie round-trips, gate off when no pw
+    global AUTH_PW, AUTH_SECRET
+    assert is_authed({}) is True, "gate must be open when no password set"
+    AUTH_PW, AUTH_SECRET = "s3cret", b"s3cret"
+    try:
+        good = auth_token()
+        assert is_authed({"Cookie": f"{COOKIE}={good}"}) is True
+        assert is_authed({}) is False
+        assert is_authed({"Cookie": f"{COOKIE}=deadbeef"}) is False
+        assert is_authed({"Cookie": "other=1"}) is False
+        # a cookie signed with a different secret must not validate
+        AUTH_SECRET = b"different"
+        assert is_authed({"Cookie": f"{COOKIE}={good}"}) is False
+    finally:
+        AUTH_PW, AUTH_SECRET = "", b"dev"
 
     # sparkline: direction and degenerate input
     assert "class=up" in sparkline([("a", 10), ("b", 20)])
