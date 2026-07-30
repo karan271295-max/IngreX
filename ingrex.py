@@ -34,6 +34,8 @@ DOC_TYPES = ["COA", "MSDS", "Spec Sheet", "GMP", "FSSAI", "ISO 22000",
              "Halal", "Kosher", "Organic (NPOP/USDA)", "Allergen Statement",
              "Heavy Metals Report", "Stability Data"]
 VENDOR_KINDS = ["Manufacturer", "Trader", "Importer"]
+BUSINESS_ROLES = ["Contract Manufacturer", "Brand / Client", "Raw Material Manufacturer",
+                  "Trader", "Importer", "Distributor"]
 
 SCHEMA = """
 CREATE TABLE ingredient (
@@ -211,6 +213,9 @@ def ensure_invites(con):
     con.execute("""CREATE TABLE IF NOT EXISTS invite(
         code TEXT PRIMARY KEY, note TEXT, is_admin INTEGER DEFAULT 0,
         revoked INTEGER DEFAULT 0, created TEXT)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS profile(
+        code TEXT PRIMARY KEY, name TEXT, company TEXT, role TEXT,
+        gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT)""")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
@@ -413,6 +418,10 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--line2);
   padding:2px 7px;border-radius:6px;color:var(--ink)}
 .duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
+.trendsel{width:100%;font:inherit;font-size:14px;font-weight:600;padding:9px 12px;
+  border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);cursor:pointer;
+  appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7d75' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 .chartbox{margin-top:14px}
 .chartbox svg{width:100%;height:auto;display:block}
 .axl{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif}
@@ -868,13 +877,18 @@ def top_suppliers(con, limit=3):
     return out or "<p class=empty>No rated suppliers yet.</p>"
 
 
-def view_dashboard(con, wl=frozenset()):
+def view_dashboard(con, wl=frozenset(), trend_sel=""):
     rows = search_ingredients(con)
     mv = moves_map(con)
-    feat = max(rows, key=lambda r: r["vendors"] or 0)
+    tid = int(trend_sel) if trend_sel.isdigit() else None
+    feat = (next((r for r in rows if r["id"] == tid), None)
+            or max(rows, key=lambda r: r["vendors"] or 0))
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
         (feat["id"],)).fetchall()
+    trend_opts = "".join(
+        f"<option value={r['id']}{' selected' if r['id'] == feat['id'] else ''}>{E(r['name'])}</option>"
+        for r in rows)
     movers = ""
     for m in market_movers(con):
         up = m["pct"] >= 0
@@ -899,7 +913,10 @@ def view_dashboard(con, wl=frozenset()):
         <div class='panel pad'>
           <div class=ph><h3>Price trend</h3>
             <a href='/ingredient/{feat['id']}'>Details →</a></div>
-          <div class=metaline>{E(feat['name'])} · monthly avg ₹/{E(feat['unit'])}</div>
+          <form method=get action='/' style='margin:12px 0 4px'>
+            <select name=trend onchange='this.form.submit()' class=trendsel>{trend_opts}</select>
+          </form>
+          <div class=metaline>Monthly average landed price, ₹/{E(feat['unit'])}</div>
           <div class=chartbox>{price_chart([(m['month'], m['price']) for m in trend])}</div>
         </div>
         <div class='panel pad'>
@@ -977,8 +994,13 @@ def view_admin(con):
         <td class=metaline>{E(u['code'] or '—')}</td>
         <td class=metaline>{E(u['ip'])}</td>
         <td>{'<span class=tag>admin</span>' if u['admin'] else ''}</td>
-        <td class=metaline>{_ago(u['ago'])}</td></tr>""" for u in who) \
-        or "<tr><td colspan=5 class=empty>No one online right now.</td></tr>"
+        <td class=metaline>{_ago(u['ago'])}</td>
+        <td>{'' if u['admin'] or not u['code'] else
+             f"<form method=post action='/admin/kick' style='margin:0'>"
+             f"<input type=hidden name=code value='{E(u['code'])}'>"
+             f"<button class=xbtn>Remove</button></form>"}</td></tr>"""
+        for u in who) \
+        or "<tr><td colspan=6 class=empty>No one online right now.</td></tr>"
 
     invites = con.execute(
         "SELECT * FROM invite ORDER BY is_admin DESC, revoked, created DESC").fetchall()
@@ -1002,7 +1024,8 @@ def view_admin(con):
       <div class='panel pad'>
         <div class=ph><h3>Online now</h3><span class=count>{len(who)} active · last 5 min</span></div>
         <div class=tablewrap style='margin-top:14px'><table>
-          <thead><tr><th>User</th><th>Invite code</th><th>IP</th><th></th><th>Last active</th></tr></thead>
+          <thead><tr><th>User</th><th>Invite code</th><th>IP</th><th></th>
+            <th>Last active</th><th></th></tr></thead>
           <tbody>{online_rows}</tbody></table></div>
       </div>
       <div class='panel pad'>
@@ -1256,6 +1279,11 @@ def is_admin():
     return bool(ident and ident["is_admin"])
 
 
+def profile_done(con, code):
+    r = con.execute("SELECT completed FROM profile WHERE code=?", (code,)).fetchone()
+    return bool(r and r["completed"])
+
+
 LOGIN_CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -1335,6 +1363,89 @@ def login_page(err="", prefill=""):
             f"<button>Enter portal</button></form>"
             f"<div class=foot>Ingrex · B2B ingredient intelligence</div>"
             f"</div></html>").encode()
+
+
+WELCOME_CSS = """
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;
+  display:grid;place-items:center;padding:24px;color:#22332c;
+  background:radial-gradient(120% 120% at 20% 0%,#e7f4ee,#f4f7f5 60%)}
+.wz{width:100%;max-width:460px;background:#fff;border:1px solid #e6ece8;border-radius:20px;
+  box-shadow:0 30px 70px -30px rgba(15,31,26,.35);padding:30px 30px 26px}
+.wz .brand{font-size:24px;font-weight:800;letter-spacing:-.03em;color:#0f1f1a}
+.wz .brand span{color:#0d7a56}
+.wz .sub{color:#6b7d75;font-size:14px;margin:4px 0 20px}
+.bar{height:6px;background:#e6ece8;border-radius:20px;overflow:hidden;margin-bottom:6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#12b884,#0d7a56);
+  width:33%;transition:width .3s ease}
+.stepno{font-size:12px;font-weight:700;color:#6b7d75;margin-bottom:18px}
+.step{display:none;flex-direction:column;gap:14px}
+.step.active{display:flex}
+.step h3{font-size:17px;color:#0f1f1a}
+label{font-size:12px;font-weight:700;color:#42544c;display:block;margin-bottom:5px}
+.f input,.f select{width:100%;padding:12px 13px;font-size:14px;border:1px solid #dfe7e2;
+  border-radius:10px;background:#fff;color:#0f1f1a;outline:0}
+.f input:focus,.f select:focus{border-color:#0d7a56;box-shadow:0 0 0 3px #e7f4ee}
+.err{background:#fbe9df;border:1px solid #e6c3ad;color:#b4541c;font-size:13px;font-weight:600;
+  padding:10px 12px;border-radius:10px;margin-bottom:14px}
+.row{display:flex;gap:20px;margin-top:20px}
+button{flex:1;padding:13px;font-size:14px;font-weight:700;border:0;border-radius:11px;cursor:pointer}
+.next{background:#0d7a56;color:#fff}.next:hover{background:#0a5d41}
+.back{background:#fff;border:1px solid #dfe7e2;color:#42544c}.back:hover{background:#f4f7f5}
+.back[hidden]{display:none}
+"""
+
+
+def view_welcome(con, code, err="", d=None):
+    d = d or {}
+    roles = "".join(f"<option{' selected' if d.get('role') == r else ''}>{E(r)}</option>"
+                    for r in BUSINESS_ROLES)
+    v = lambda k: E(d.get(k, ""))
+    return (f"<!doctype html><html lang=en><meta charset=utf-8>"
+            f"<meta name=viewport content='width=device-width,initial-scale=1'>"
+            f"<title>Welcome · Ingrex</title><style>{WELCOME_CSS}</style>"
+            f"<form class=wz method=post action='/welcome'>"
+            f"<div class=brand>ingre<span>x</span></div>"
+            f"<div class=sub>Let's set up your account — takes under a minute.</div>"
+            f"<div class=bar><i id=fill></i></div>"
+            f"<div class=stepno id=stepno>Step 1 of 3</div>"
+            f"{f'<div class=err>{E(err)}</div>' if err else ''}"
+            f"<div class='step active'><h3>About you</h3>"
+            f"<div class=f><label>Full name</label>"
+            f"<input name=name value='{v('name')}' required maxlength=80 placeholder='e.g. Karan Sharma'></div>"
+            f"<div class=f><label>Company / organisation</label>"
+            f"<input name=company value='{v('company')}' required maxlength=120 placeholder='e.g. Sapiens Labs'></div></div>"
+            f"<div class=step><h3>Your business</h3>"
+            f"<div class=f><label>Business type</label>"
+            f"<select name=role required><option value=''>Select…</option>{roles}</select></div>"
+            f"<div class=f><label>GSTIN</label>"
+            f"<input name=gst value='{v('gst')}' required maxlength=15 minlength=15 "
+            f"placeholder='15-character GST number' style='text-transform:uppercase'></div></div>"
+            f"<div class=step><h3>Location</h3>"
+            f"<div class=f><label>City</label>"
+            f"<input name=city value='{v('city')}' required maxlength=60 placeholder='e.g. Hyderabad'></div>"
+            f"<div class=f><label>Country</label>"
+            f"<input name=country value='{v('country') or 'India'}' maxlength=60></div></div>"
+            f"<div class=row>"
+            f"<button type=button class=back id=back hidden>Back</button>"
+            f"<button type=button class=next id=next>Continue</button></div>"
+            f"</form>{WELCOME_JS}</html>").encode()
+
+
+WELCOME_JS = """<script>
+(function(){var steps=[].slice.call(document.querySelectorAll('.step')),i=0,n=steps.length;
+var fill=document.getElementById('fill'),lbl=document.getElementById('stepno'),
+back=document.getElementById('back'),next=document.getElementById('next'),
+form=document.querySelector('.wz');
+function render(){steps.forEach(function(s,k){s.classList.toggle('active',k===i);});
+fill.style.width=((i+1)/n*100)+'%';lbl.textContent='Step '+(i+1)+' of '+n;
+back.hidden=i===0;next.textContent=i===n-1?'Finish':'Continue';}
+function valid(){var ok=true;steps[i].querySelectorAll('input,select').forEach(function(el){
+if(!el.checkValidity()){el.reportValidity();ok=false;}});return ok;}
+next.addEventListener('click',function(){if(!valid())return;if(i<n-1){i++;render();}else{form.submit();}});
+back.addEventListener('click',function(){if(i>0){i--;render();}});
+render();})();
+</script>"""
 
 
 # ---------- server ----------
@@ -1421,6 +1532,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             touch_online(f"{ident['code'] if ident else 'anon'}|{self._client_ip()}",
                          ident["note"] if ident else "Guest", ident["code"] if ident else "",
                          self._client_ip(), is_admin())
+            # onboarding: invited (non-admin) users must complete their profile first
+            if ident and not is_admin() and not profile_done(con, ident["code"]):
+                if url.path != "/welcome":
+                    return self._redirect("/welcome")
+                return self._send(view_welcome(con, ident["code"]))
+            if url.path == "/welcome":
+                return self._redirect("/")   # already done, or admin/dev
             wl = watched_ids(self.headers)
             if url.path == "/watch":
                 iid = int(params.get("id", ["0"])[0]) if params.get("id", ["0"])[0].isdigit() else 0
@@ -1431,7 +1549,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                           "Path=/; HttpOnly; SameSite=Lax; Secure")
                 return self._redirect(safe_back(params.get("back", ["/"])[0]), cookie)
             if url.path == "/":
-                out = view_dashboard(con, wl)
+                out = view_dashboard(con, wl, params.get("trend", [""])[0])
             elif url.path == "/search":
                 out = view_search(con, params, wl)
             elif url.path == "/watchlist":
@@ -1471,6 +1589,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._send(login_page("Invalid or revoked invite code.", code), 401)
             if gated and not ident:
                 return self._redirect("/login")
+            if path == "/welcome":
+                if not ident:
+                    return self._redirect("/")
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                d = {"name": g("name")[:80], "company": g("company")[:120], "role": g("role"),
+                     "gst": g("gst").upper()[:15], "city": g("city")[:60],
+                     "country": g("country")[:60] or "India"}
+                if not (d["name"] and d["company"] and d["role"] in BUSINESS_ROLES
+                        and len(d["gst"]) == 15 and d["city"]):
+                    return self._send(view_welcome(
+                        con, ident["code"], "Please complete every field (GSTIN is 15 characters).", d), 400)
+                con.execute("INSERT OR REPLACE INTO profile"
+                            "(code,name,company,role,gst,city,completed,created) VALUES(?,?,?,?,?,?,1,?)",
+                            (ident["code"], d["name"], d["company"], d["role"], d["gst"],
+                             d["city"], date.today().isoformat()))
+                con.execute("UPDATE invite SET note=? WHERE code=?", (d["name"], ident["code"]))
+                con.commit()
+                return self._redirect("/")
             admin = is_admin() or not gated
             if path == "/rate":
                 vid, msg = post_rate(con, body)
@@ -1487,6 +1624,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 code = urllib.parse.parse_qs(body).get("code", [""])[0]
                 con.execute("UPDATE invite SET revoked=1 WHERE code=? AND is_admin=0", (code,))
                 con.commit()
+                return self._redirect("/admin")
+            if path == "/admin/kick" and admin:
+                # remove an active user: revoke their code (logs them out) + drop presence
+                code = urllib.parse.parse_qs(body).get("code", [""])[0]
+                if code:
+                    con.execute("UPDATE invite SET revoked=1 WHERE code=? AND is_admin=0", (code,))
+                    con.commit()
+                    with ONLINE_LOCK:
+                        for k in [k for k, v in ONLINE.items() if v["code"] == code]:
+                            del ONLINE[k]
                 return self._redirect("/admin")
             self._send(page("Not found", "<h1>404</h1>"), 404)
         finally:
@@ -1601,8 +1748,32 @@ def demo():
     assert b"Boss" in view_dashboard(con), "greeting uses the signed-in user's name"
     assert b"/logout" in view_dashboard(con), "logout button present"
     CTX.ident = None
+
+    # onboarding: profile gate + wizard render, then completion
+    assert not profile_done(con, "CODE1")
+    assert b"Step 1 of 3" in view_welcome(con, "CODE1")
+    con.execute("INSERT OR REPLACE INTO profile"
+                "(code,name,company,role,gst,city,completed,created) "
+                "VALUES('CODE1','Riya','Acme','Trader','123456789012345','Pune',1,'d')")
+    con.commit()
+    assert profile_done(con, "CODE1")
+
+    # kick: remove-active-user logic revokes code + drops presence
+    ONLINE.clear()
+    touch_online("CODE1|9.9.9.9", "Riya", "CODE1", "9.9.9.9")
+    assert online_count() == 1
+    with ONLINE_LOCK:
+        for k in [k for k, v in ONLINE.items() if v["code"] == "CODE1"]:
+            del ONLINE[k]
+    assert online_count() == 0
+    ONLINE.clear()
     con.execute("DELETE FROM invite")
     con.commit()
+
+    # price-trend selector: dashboard renders a picker and honours the choice
+    tid = search_ingredients(con)[2]["id"]
+    assert b"class=trendsel" in view_dashboard(con)
+    assert f"value={tid} selected".encode() in view_dashboard(con, set(), str(tid))
 
     # card shows rating, price-move badge, supplier count, updated label — no image
     dash = view_dashboard(con)
