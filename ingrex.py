@@ -202,38 +202,113 @@ def init_db(path=None):
 # ---------- rendering ----------
 
 CSS = """
-:root{--ink:#12211c;--mut:#5d7168;--line:#dfe7e2;--bg:#f6f8f7;--card:#fff;
---acc:#0f7a5a;--warn:#b4541c}
+:root{
+  --ink:#0f1f1a;--body:#33443d;--mut:#6b7d75;--line:#e6ece8;--line2:#f0f4f1;
+  --bg:#f4f7f5;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#e7f4ee;
+  --up:#c1531a;--down:#0d7a56;--gold:#d99a1c;
+  --shadow:0 1px 2px rgba(15,31,26,.04),0 4px 16px -8px rgba(15,31,26,.10);
+  --radius:14px;
+}
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-color:var(--ink);background:var(--bg)}
-a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
-header{background:var(--ink);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:18px}
-header b{font-size:20px;letter-spacing:-.5px}header b span{color:#6fd1a8}
-header a{color:#cfe0d8;font-size:14px}
-main{max-width:1080px;margin:0 auto;padding:24px}
-h1{font-size:24px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 10px;color:var(--mut);
-text-transform:uppercase;letter-spacing:.6px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px;line-height:1.55;color:var(--body);background:var(--bg);
+  -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+a{color:var(--acc);text-decoration:none}a:hover{color:var(--acc-d)}
+h1{font-size:27px;line-height:1.15;letter-spacing:-.02em;margin:0 0 6px;color:var(--ink);font-weight:700}
+h2{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mut);margin:34px 0 12px}
+p{margin:0 0 12px}
+
+/* header */
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.82);
+  backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;padding:0 24px;height:60px}
+.brand{display:flex;align-items:baseline;gap:2px;font-size:21px;font-weight:800;
+  letter-spacing:-.03em;color:var(--ink);margin-right:20px}
+.brand span{color:var(--acc)}
+.brand small{margin-left:10px;font-size:11px;font-weight:600;letter-spacing:.04em;
+  color:var(--mut);align-self:center;text-transform:uppercase}
+nav{display:flex;gap:4px}
+nav a{padding:7px 13px;border-radius:8px;font-size:14px;font-weight:600;color:var(--body)}
+nav a:hover{background:var(--acc-t);color:var(--acc-d)}
+.spacer{flex:1}
+.pill-live{font-size:11px;font-weight:700;color:var(--acc);background:var(--acc-t);
+  padding:5px 11px;border-radius:20px;letter-spacing:.03em}
+
+/* layout */
+main{max-width:1120px;margin:0 auto;padding:30px 24px 60px}
+.lead{color:var(--mut);font-size:15px;max-width:60ch;margin:-2px 0 22px}
+.back{display:inline-block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:14px}
+.back:hover{color:var(--acc)}
+
+/* cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+a.tile,.tile{display:block;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);color:inherit;
+  transition:box-shadow .16s ease,border-color .16s ease,transform .16s ease}
+a.tile:hover{border-color:#cfe0d7;box-shadow:0 2px 4px rgba(15,31,26,.05),0 14px 30px -12px rgba(15,31,26,.18);
+  transform:translateY(-2px)}
+.tile .ttl{font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:1.3}
+.tile:hover .ttl{color:var(--acc-d)}
+.price{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.price .unit{font-size:13px;font-weight:500;color:var(--mut)}
+
+/* tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);background:var(--card)}
 table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
-.tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:20px;
-background:var(--bg);border:1px solid var(--line);color:var(--mut);margin:1px 2px 1px 0}
-.kind{font-weight:600;color:#fff;background:var(--acc);border:0}
-.kind.Trader{background:#7a5cc4}.kind.Importer{background:#c47a1c}
+thead th{background:var(--line2);font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--mut);text-align:left;padding:11px 16px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+tbody td{padding:14px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--line2)}
+
+/* tags + badges */
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:7px;
+  background:var(--bg);border:1px solid var(--line);color:var(--mut);margin:2px 3px 2px 0}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.kind{font-weight:700;color:#fff;background:var(--acc);border:0;letter-spacing:.01em}
+.kind.Trader{background:#6a58c4}.kind.Importer{background:#c47f1c}
+.func{background:var(--acc-t);border-color:transparent;color:var(--acc-d)}
 .mut{color:var(--mut);font-size:13px}
-form.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);
-border-radius:7px;background:#fff;color:var(--ink)}
-input[type=search]{flex:1;min-width:220px}
-button{font:inherit;font-weight:600;padding:8px 16px;border:0;border-radius:7px;
-background:var(--acc);color:#fff;cursor:pointer}
-.up{color:var(--warn);font-weight:600}.down{color:var(--acc);font-weight:600}
-.stars{color:#e0a30c;letter-spacing:1px}
-.empty{color:var(--mut);padding:20px 0}
-footer{max-width:1080px;margin:0 auto;padding:8px 24px 40px;color:var(--mut);font-size:12px}
+.metaline{color:var(--mut);font-size:13px;margin:3px 0}
+
+/* forms */
+form.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+input,select,textarea{font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;color:var(--ink);transition:border-color .12s,box-shadow .12s}
+input::placeholder{color:#9fb0a8}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--acc);
+  box-shadow:0 0 0 3px var(--acc-t)}
+input[type=search]{flex:1;min-width:240px}
+select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7d75' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;appearance:none}
+button{font:inherit;font-size:14px;font-weight:600;padding:10px 20px;border:0;border-radius:9px;
+  background:var(--acc);color:#fff;cursor:pointer;transition:background .12s,transform .06s}
+button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
+
+/* trend + rating */
+.up{color:var(--up);font-weight:700}.down{color:var(--down);font-weight:700}
+.trend svg{color:var(--acc);vertical-align:middle}
+.stars{color:var(--gold);letter-spacing:1px}
+.score{font-weight:700;color:var(--ink)}
+.review{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;
+  background:var(--card);box-shadow:var(--shadow)}
+.review b{color:var(--ink)}
+.empty{color:var(--mut);padding:26px 0;text-align:center}
+.count{color:var(--mut);font-weight:600;font-size:13px}
+
+footer{max-width:1120px;margin:0 auto;padding:24px;color:var(--mut);font-size:12px;
+  border-top:1px solid var(--line);margin-top:20px}
+
+@media(max-width:560px){
+  main{padding:22px 16px 48px}header{padding:0 16px}
+  h1{font-size:23px}.brand small{display:none}
+}
 """
 
 E = html.escape
@@ -243,10 +318,13 @@ def page(title, body):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{E(title)} · Ingrex</title><style>{CSS}</style>"
-            f"<header><b>ingre<span>x</span></b>"
-            f"<a href='/'>Ingredients</a><a href='/vendors'>Vendors</a></header>"
+            f"<header><a class=brand href='/'>ingre<span>x</span>"
+            f"<small>Nutraceutical sourcing</small></a>"
+            f"<nav><a href='/'>Ingredients</a><a href='/vendors'>Vendors</a></nav>"
+            f"<span class=spacer></span><span class=pill-live>Pilot</span></header>"
             f"<main>{body}</main>"
-            f"<footer>Ingrex demo · prices and ratings are seed data, not live quotes.</footer>"
+            f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
+            f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
             f"</html>").encode()
 
 
@@ -269,9 +347,12 @@ def sparkline(points, w=180, h=40):
                    for i, v in enumerate(vals))
     pct = (vals[-1] - vals[0]) / vals[0] * 100
     cls, sign = ("up", "+") if pct >= 0 else ("down", "")
-    return (f"<svg width={w} height={h} viewBox='0 0 {w} {h}' aria-label='12 month price trend'>"
-            f"<polyline points='{pts}' fill=none stroke=currentColor stroke-width=1.8/></svg>"
-            f" <span class={cls}>{sign}{pct:.1f}%</span> <span class=mut>12 mo</span>")
+    return (f"<span class=trend style='display:inline-flex;align-items:center;gap:8px'>"
+            f"<svg width={w} height={h} viewBox='0 0 {w} {h}' preserveAspectRatio=none "
+            f"aria-label='12 month price trend'>"
+            f"<polyline points='{pts}' fill=none stroke=currentColor "
+            f"stroke-width=1.8 stroke-linejoin=round stroke-linecap=round/></svg>"
+            f"<span class={cls}>{sign}{pct:.1f}%</span> <span class=mut>12&nbsp;mo</span></span>")
 
 
 def doc_tags(docs):
@@ -344,28 +425,32 @@ def view_home(con, params):
         trend = con.execute(
             "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
             (r["id"],)).fetchall()
-        price = (f"₹{r['lo']:,.0f} – ₹{r['hi']:,.0f} /{E(r['unit'])}"
-                 if r["lo"] else "<span class=mut>no offers</span>")
-        cards.append(f"""<div class=card>
-          <a href='/ingredient/{r['id']}'><b>{E(r['name'])}</b></a>
-          <div class=mut>{E(r['category'])} · CAS {E(r['cas'])}</div>
-          <div style='margin:8px 0'>{price}</div>
-          <div class=mut>{r['vendors']} vendor(s)</div>
-          <div>{"".join(f"<span class=tag>{E(f.strip())}</span>" for f in r['functions'].split(','))}</div>
-          <div style='margin-top:8px'>{sparkline([(m['month'], m['price']) for m in trend])}</div>
-        </div>""")
+        price = (f"<span class=price>₹{r['lo']:,.0f} – ₹{r['hi']:,.0f}"
+                 f"<span class=unit> /{E(r['unit'])}</span></span>"
+                 if r["lo"] else "<span class=mut>No offers yet</span>")
+        funcs = "".join(f"<span class='tag func'>{E(f.strip())}</span>"
+                        for f in r['functions'].split(','))
+        cards.append(f"""<a class=tile href='/ingredient/{r['id']}'>
+          <div class=ttl>{E(r['name'])}</div>
+          <div class=metaline>{E(r['category'])} · CAS {E(r['cas'])}</div>
+          <div style='margin:12px 0 4px'>{price}</div>
+          <div class=count>{r['vendors']} vendor(s)</div>
+          <div class=chips style='margin:10px 0'>{funcs}</div>
+          <div>{sparkline([(m['month'], m['price']) for m in trend])}</div>
+        </a>""")
 
     return page("Ingredients", f"""
       <h1>Ingredient directory</h1>
-      <p class=mut>Search ingredients, compare vendor price bands, check documents and ratings.</p>
+      <p class=lead>Search the nutraceutical ingredient catalogue — compare vendor price
+         bands, available documents, supplier type and market trend in one view.</p>
       <div class=card><form class=filters method=get action='/'>
-        <input type=search name=q placeholder='Ashwagandha, curcumin, CAS, function…' value='{E(q)}'>
+        <input type=search name=q placeholder='Search ingredient, CAS, function…' value='{E(q)}'>
         <select name=kind>{opts(VENDOR_KINDS, kind, 'Any vendor type')}</select>
         <select name=doc>{opts(DOC_TYPES, doc, 'Any document')}</select>
-        <input name=maxp inputmode=decimal placeholder='Max ₹/unit' value='{E(raw)}' style='width:130px'>
+        <input name=maxp inputmode=decimal placeholder='Max ₹/unit' value='{E(raw)}' style='width:140px'>
         <button>Search</button>
       </form></div>
-      <h2>{len(rows)} ingredient(s)</h2>
+      <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
       <div class=grid>{"".join(cards) or "<p class=empty>Nothing matched those filters.</p>"}</div>""")
 
 
@@ -379,29 +464,32 @@ def view_ingredient(con, ing_id):
         (ing_id,)).fetchall()
 
     rows = "".join(f"""<tr>
-        <td><a href='/vendor/{o['vid']}'>{E(o['vname'])}</a>
-            <div class=mut>{E(o['city'])}</div></td>
+        <td><a href='/vendor/{o['vid']}'><b>{E(o['vname'])}</b></a>
+            <div class=metaline>{E(o['city'])}</div></td>
         <td><span class='tag kind {E(o['kind'])}'>{E(o['kind'])}</span></td>
-        <td>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f}<div class=mut>/{E(o['unit'])}</div></td>
-        <td>{E(o['moq'] or '-')}</td>
-        <td>{o['lead_days'] or '-'} d</td>
-        <td>{stars(o['avg_score'])}<div class=mut>{o['n_score']} review(s)</div></td>
-        <td>{doc_tags(o['docs'])}</td></tr>""" for o in offers)
+        <td><span class=price style='font-size:15px'>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f}</span>
+            <div class=metaline>per {E(o['unit'])}</div></td>
+        <td>{E(o['moq'] or '—')}</td>
+        <td>{str(o['lead_days']) + ' d' if o['lead_days'] else '—'}</td>
+        <td>{stars(o['avg_score'])}<div class=metaline>{o['n_score']} review(s)</div></td>
+        <td><div class=chips>{doc_tags(o['docs'])}</div></td></tr>""" for o in offers)
 
     return page(ing["name"], f"""
-      <p class=mut><a href='/'>← Ingredients</a></p>
+      <a class=back href='/'>← Ingredients</a>
       <h1>{E(ing['name'])}</h1>
-      <p class=mut>{E(ing['category'])} · CAS {E(ing['cas'])} · {E(ing['functions'])}</p>
-      <div class=card>{E(ing['description'])}</div>
+      <p class=metaline>{E(ing['category'])} · CAS {E(ing['cas'])}</p>
+      <div class=chips style='margin:10px 0 18px'>
+        {"".join(f"<span class='tag func'>{E(f.strip())}</span>" for f in ing['functions'].split(','))}</div>
+      <div class=card style='color:var(--body)'>{E(ing['description'])}</div>
       <h2>Market trend</h2>
-      <div class=card>{sparkline([(m['month'], m['price']) for m in trend], 520, 90)}
-        <div class=mut>Monthly average landed price, ₹/{E(ing['unit'])}.
-        {(str(trend[0]['month']) + ' → ' + str(trend[-1]['month'])) if trend else ''}</div></div>
-      <h2>{len(offers)} vendor(s)</h2>
-      <div class=card><table>
-        <tr><th>Vendor</th><th>Type</th><th>Price range</th><th>MOQ</th>
-            <th>Lead</th><th>Rating</th><th>Documents</th></tr>
-        {rows or "<tr><td colspan=7 class=empty>No vendors listed yet.</td></tr>"}
+      <div class=card>{sparkline([(m['month'], m['price']) for m in trend], 560, 90)}
+        <div class=metaline style='margin-top:10px'>Monthly average landed price, ₹/{E(ing['unit'])}
+        {('· ' + str(trend[0]['month']) + ' → ' + str(trend[-1]['month'])) if trend else ''}</div></div>
+      <h2>{len(offers)} vendor{'' if len(offers) == 1 else 's'}</h2>
+      <div class=tablewrap><table>
+        <thead><tr><th>Vendor</th><th>Type</th><th>Price range</th><th>MOQ</th>
+            <th>Lead</th><th>Rating</th><th>Documents</th></tr></thead>
+        <tbody>{rows or "<tr><td colspan=7 class=empty>No vendors listed yet.</td></tr>"}</tbody>
       </table></div>""")
 
 
@@ -411,14 +499,18 @@ def view_vendors(con):
                (SELECT COUNT(*) FROM rating WHERE vendor_id=v.id) n,
                (SELECT COUNT(*) FROM offer WHERE vendor_id=v.id) items
         FROM vendor v ORDER BY a DESC NULLS LAST, v.name""").fetchall()
-    cards = "".join(f"""<div class=card>
-        <a href='/vendor/{v['id']}'><b>{E(v['name'])}</b></a>
-        <div style='margin:6px 0'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
-          <span class=mut>{E(v['city'])}, {E(v['country'])}</span></div>
-        <div>{stars(v['a'])} <span class=mut>({v['n']})</span></div>
-        <div class=mut>{v['items']} ingredient(s) listed</div>
-        <div style='margin-top:6px'>{doc_tags(v['docs'])}</div></div>""" for v in rows)
-    return page("Vendors", f"<h1>Vendors</h1><div class=grid>{cards}</div>")
+    cards = "".join(f"""<a class=tile href='/vendor/{v['id']}'>
+        <div class=ttl>{E(v['name'])}</div>
+        <div style='margin:10px 0 8px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
+          <span class=metaline>{E(v['city'])}, {E(v['country'])}</span></div>
+        <div style='margin-bottom:6px'>{stars(v['a'])} <span class=count>({v['n']})</span></div>
+        <div class=count>{v['items']} ingredient(s) listed</div>
+        <div class=chips style='margin-top:10px'>{doc_tags(v['docs'])}</div></a>""" for v in rows)
+    return page("Vendors", f"""
+      <h1>Vendors</h1>
+      <p class=lead>Manufacturers, traders and importers on the platform — ranked by
+         client and manufacturer ratings.</p>
+      <div class=grid>{cards}</div>""")
 
 
 def view_vendor(con, vid, msg=""):
@@ -433,38 +525,45 @@ def view_vendor(con, vid, msg=""):
     reviews = con.execute(
         "SELECT * FROM rating WHERE vendor_id=? ORDER BY id DESC", (vid,)).fetchall()
 
-    items = "".join(f"""<tr><td><a href='/ingredient/{o['iid']}'>{E(o['iname'])}</a>
-        <div class=mut>{E(o['category'])}</div></td>
-        <td>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f} /{E(o['unit'])}</td>
-        <td>{E(o['moq'] or '-')}</td><td>{o['lead_days'] or '-'} d</td>
-        <td class=mut>{E(o['updated'] or '')}</td></tr>""" for o in offers)
+    items = "".join(f"""<tr><td><a href='/ingredient/{o['iid']}'><b>{E(o['iname'])}</b></a>
+        <div class=metaline>{E(o['category'])}</div></td>
+        <td><span class=price style='font-size:15px'>₹{o['price_min']:,.0f} – ₹{o['price_max']:,.0f}</span>
+            <div class=metaline>per {E(o['unit'])}</div></td>
+        <td>{E(o['moq'] or '—')}</td><td>{str(o['lead_days']) + ' d' if o['lead_days'] else '—'}</td>
+        <td class=metaline>{E(o['updated'] or '')}</td></tr>""" for o in offers)
 
-    revs = "".join(f"""<div class=card><b>{E(r['rater'])}</b>
-        <span class=tag>{E(r['rater_type'] or 'Client')}</span> {stars(r['score'])}
-        <div class=mut style='margin-top:4px'>{E(r['note'] or '')} · {E(r['created'] or '')}</div>
+    revs = "".join(f"""<div class=review>
+        <b>{E(r['rater'])}</b> <span class=tag>{E(r['rater_type'] or 'Client')}</span>
+        {stars(r['score'])}
+        <div class=metaline style='margin-top:6px'>{E(r['note'] or '')}</div>
+        <div class=count style='margin-top:4px'>{E(r['created'] or '')}</div>
         </div>""" for r in reviews) or "<p class=empty>No reviews yet.</p>"
 
     return page(v["name"], f"""
-      <p class=mut><a href='/vendors'>← Vendors</a></p>
+      <a class=back href='/vendors'>← Vendors</a>
       <h1>{E(v['name'])}</h1>
-      <p><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
-         <span class=mut>{E(v['city'])}, {E(v['country'])} · GSTIN {E(v['gst'] or '-')}</span></p>
-      <div class=card>{stars(avg)} from {n} client/manufacturer review(s)</div>
-      <h2>Documents on file</h2><div class=card>{doc_tags(v['docs'])}</div>
-      <h2>{len(offers)} ingredient(s)</h2>
-      <div class=card><table>
-        <tr><th>Ingredient</th><th>Price range</th><th>MOQ</th><th>Lead</th><th>Updated</th></tr>
-        {items or "<tr><td colspan=5 class=empty>Nothing listed.</td></tr>"}</table></div>
+      <p style='margin-bottom:16px'><span class='tag kind {E(v['kind'])}'>{E(v['kind'])}</span>
+         <span class=metaline>{E(v['city'])}, {E(v['country'])} · GSTIN {E(v['gst'] or '—')}</span></p>
+      <div class=card style='display:flex;align-items:center;gap:14px'>
+        <span style='font-size:26px'>{stars(avg)}</span>
+        <span class=count>from {n} client / manufacturer review(s)</span></div>
+      <h2>Documents on file</h2>
+      <div class=card><div class=chips>{doc_tags(v['docs'])}</div></div>
+      <h2>{len(offers)} ingredient{'' if len(offers) == 1 else 's'} listed</h2>
+      <div class=tablewrap><table>
+        <thead><tr><th>Ingredient</th><th>Price range</th><th>MOQ</th><th>Lead</th><th>Updated</th></tr></thead>
+        <tbody>{items or "<tr><td colspan=5 class=empty>Nothing listed.</td></tr>"}</tbody>
+      </table></div>
       <h2>Rate this vendor</h2>
       <div class=card>
-        {f"<p class=down>{E(msg)}</p>" if msg else ""}
+        {f"<p class=down style='margin-top:0'>{E(msg)}</p>" if msg else ""}
         <form class=filters method=post action='/rate'>
           <input type=hidden name=vendor_id value='{vid}'>
           <input name=rater placeholder='Your company' required maxlength=120>
           <select name=rater_type><option>Client</option><option>Manufacturer</option></select>
           <select name=score>{"".join(f"<option value={s}>{s} ★</option>" for s in (5, 4, 3, 2, 1))}</select>
           <input name=note placeholder='Quality, docs, lead time…' maxlength=500 style='flex:1'>
-          <button>Submit</button>
+          <button>Submit rating</button>
         </form></div>
       <h2>Reviews</h2>{revs}""")
 
