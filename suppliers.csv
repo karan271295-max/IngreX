@@ -1,50 +1,43 @@
-﻿Item Name,Rate Per Kg,Vendor Name,POC,POC Number,POC Email,Vendor GST,Vendor Address,Vendor State,Vendor Pincode
-Stevia 97%,"₹8,500.00 ",Scope Ingredients Pvt Ltd,Henil Shah,8433980484,henil.shah@scope-india.com,07ABMCS7087D1ZX,"Ground Floor, Khasra No.1/21, Gali No.5, Main Burari Road, Swaroop Nagar,New Delhi",Delhi,110042
-Jaggery Powder Dhampure,₹80.00 ,Dhampure Speciality Sugar,,,shrey@sugarindia.com,09AACCD0719N1ZI,"Vill. Pallawala, Tehsil Dhampur",Uttar Pradesh,246761
-Milk Permeate Powder ,₹135.00 ,Kp Manish Global,Kishan,,kishan@kpmanish.com,06AABCL3843N1ZA,"Ground Floor, KILLA NO 7//23/1, 23/2, 24/1, NARELA ROAD, Village Safiabad Pana Paposian, Kundli Industrial Area,",Haryana,131028
-Skimmed Milk Powder (New),₹280.00 ,Tirumala Milk Products,Mr.Virang,7304921327,infoavchemical@gmail.com,27ABVFA7475M1ZF,"9th Floor, 901, Sureshwari Techno IT Park Premises co-op society limited, Link Road, Borivali West",Maharashtra,400092
-Hpmc Cap White /White Size '00',₹0.42 ,Universal Capsules Pvt.Ltd,,,Vikram.singh@acg-world.com,27AAVCA5168M1ZT,"Plot No. 20, Sector No. 13 AURIC Ð Shendra,
+Item Name,Rate Per Kg,Vendor Name,POC,POC Number,POC Email,Vendor GST,Vendor Address,Vendor State,Vendor Pincode
+Stevia 97%,"_8,500.00 ",Scope Ingredients Pvt Ltd,Henil Shah,8433980484,henil.shah@scope-india.com,07ABMCS7087D1ZX,"Ground Floor, Khasra No.1/21, Gali No.5, Main Burari Road, Swaroop Nagar,New Delhi",Delhi,110042
+Milk Permeate Powder�,_135.00 ,Kp Manish Global,Kishan,,kishan@kpmanish.com,06AABCL3843N1ZA,"Ground Floor, KILLA NO 7//23/1, 23/2, 24/1, NARELA ROAD, Village Safiabad Pana Paposian, Kundli Industrial Area,",Haryana,131028
+Skimmed Milk Powder,_280.00 ,Tirumala Milk Products,Mr.Virang,7304921327,infoavchemical@gmail.com,27ABVFA7475M1ZF,"9th Floor, 901, Sureshwari Techno IT Park Premises co-op society limited, Link Road, Borivali West",Maharashtra,400092
+Hpmc Cap White /White Size '00',_0.42 ,Universal Capsules Pvt.Ltd,,,Vikram.singh@acg-world.com,27AAVCA5168M1ZT,"Plot No. 20, Sector No. 13 AURIC _ Shendra,
 Chhatrapati Sambhaji Nagar",Maharashtra,431007
-Brown Rice Protein 80%,₹375.00 ,Kp Manish Global,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
-IPA,₹125.00 ,Dp Pharma,,,warehouse@mediwell.in,02AAPCM3559C1ZL,"Plot No 38, Phase IV, HIMUDA Industrial Township, Bhatolikalan, Baddi",Himachal Pradesh,173205
-Lactose Monohydrate,₹155.00 ,Kp Manish Global,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
-Cocoa Powder -Pancake,₹785.00 ,Functional & Innovative Foods,Nitin Sohal,9218641425,nitintraders.sml@gmail.com,02ARHPS4452Q1ZA,"25/2,, Bhagat Singh Road, Anaj Mandi,",Himachal Pradesh,171001
-Roasted Jowar Flour- Pancake,₹68.00 ,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Brown Rice Protein 80%,_375.00 ,Kp Manish Global,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
+IPA,_125.00 ,Dp Pharma,,,warehouse@mediwell.in,02AAPCM3559C1ZL,"Plot No 38, Phase IV, HIMUDA Industrial Township, Bhatolikalan, Baddi",Himachal Pradesh,173205
+Lactose Monohydrate,_155.00 ,Kp Manish Global,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
+Cocoa Powder,_785.00 ,Functional & Innovative Foods,Nitin Sohal,9218641425,nitintraders.sml@gmail.com,02ARHPS4452Q1ZA,"25/2,, Bhagat Singh Road, Anaj Mandi,",Himachal Pradesh,171001
+Jowar Flour,_68.00 ,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Roasted Oats Flour- Pancake,₹113.50 ,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Oats Flour,_113.50 ,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Roasted Ragi Flour - Pancake,59,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Ragi Flour,59,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Beta Carotene-Kf3109,"₹11,465.00 ",Kangrade Flavoures & Ingredients,Gopal,9990807427,info@kanegradeindia.com,06AABCK7579C1ZH,"PLOT NO 400, PHASE - IV, UDYOG VIHAR, GURGAON,",Haryana,122016
-L-Glutamine,₹675.00 ,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
-Mcc 101,₹150.00 ,Tiwari Pharma,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
-Milk Protein Concentration 85%,₹945.00 ,Ace International Limited,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
-Whey Protein Concentrate- Hydrolyzed,"₹2,350.00 ",Ace International Limited,,,harshit@aceinternational.co.in,27ABCCA1387Q1Z5,"CH.NO.47,D1,D2,D3 JWL COLD STORE PVT LTD NO 92/10&11,MUMBAI GOA, NATIONAL HIGHWAY-66, PALASPE",Maharashtra,410221
+Beta Carotene,"_11,465.00 ",Kangrade Flavoures & Ingredients,Gopal,9990807427,info@kanegradeindia.com,06AABCK7579C1ZH,"PLOT NO 400, PHASE - IV, UDYOG VIHAR, GURGAON,",Haryana,122016
+L-Glutamine,_675.00 ,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
+Mcc 101,_150.00 ,Tiwari Pharma,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
+Milk Protein Concentration 85%,_945.00 ,Ace International Limited,,7806809149,kishan@kpmanish.com,27AABCL3843N1Z6,"12/100 unnat nagar no 4,C.C.I colony behind jain temple,M.G road",Mumbai,400062
+Whey Protein Concentrate- Hydrolyzed,"_2,350.00 ",Ace International Limited,,,harshit@aceinternational.co.in,27ABCCA1387Q1Z5,"CH.NO.47,D1,D2,D3 JWL COLD STORE PVT LTD NO 92/10&11,MUMBAI GOA, NATIONAL HIGHWAY-66, PALASPE",Maharashtra,410221
 Medium Chain Triglycerides (Mct),760,Zeon Biosys,,9971158660,zeopure.mgr@zeon.co.in,02AAACH0860L3ZU,"VILL.KUNJA,RAMPUR ROAD,POANTA SAHIB, SIRMAUR",Himachal Pradesh,173205
 Sunflower Oil Powder (Fat) (Hoso),380,Zeon Biosys,,9971158660,zeopure.mgr@zeon.co.in,02AAACH0860L3ZU,"VILL.KUNJA,RAMPUR ROAD,POANTA SAHIB, SIRMAUR",Himachal Pradesh,173205
 Cereal Extract Powder,70,Barmalt Malting ( India ) Pvt.Ltd,Ankush,7428393946,ankush.sharma@barmaltmalting.com,08AAFCB0807Q1ZG,"Village - Keshwana Rajput, Teh. Kotputli",Rajasthan,303108
-Mdc,46.5,Mediwell Pharmacia ,TILAK MAHAJAN ,80919 02100,trmahajan@mediwell.in,02BEVPS1182K1Z1,"GROUND FLOOR , SHOWROOM NO 1,KHASARA NO 965/799,SAI ROAD , VILLAGE KARUWANA, BADDI SOLAN ,HIMACHAL PARDESH 173205",HIMACHAL PARDESH,173205
-Sunflower Seeds Extracts ( Blpl ),6000,Bright Life Care,Ankit Anmol MIshra,8102105550,"ankit.mishra1@brightlifecare.com,Yudhbir.singh@brightlifecare.com",02AAECB5311J1Z6,"BLIFE WH BADDI Khatta No. 572/616, Khasra No. 1799 & 2404/1801, Mohal Thana, Baddi,",Himachal Pradesh,173205
-Wpc - 80%,1160,Metabolistics Laboratories,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
-Astaxanthin 10% ,8200,Master Healthcare,Rajak,8219255704,master.healthcares@gmail.com,02ABEFM1300N1ZQ,"Adjoining Big Bazzar,
+Mdc,46.5,Mediwell Pharmacia�,TILAK MAHAJAN ,80919 02100,trmahajan@mediwell.in,02BEVPS1182K1Z1,"GROUND FLOOR , SHOWROOM NO 1,KHASARA NO 965/799,SAI ROAD , VILLAGE KARUWANA, BADDI SOLAN ,HIMACHAL PARDESH 173205",HIMACHAL PARDESH,173205
+Astaxanthin 10%�,8200,Master Healthcare,Rajak,8219255704,master.healthcares@gmail.com,02ABEFM1300N1ZQ,"Adjoining Big Bazzar,
 Near Hetero Drugs,Village Mauja Kalyanpur,
 Baddi",Himachal Pradesh,173205
 Isomaltulose(Palatinose),373,Sfa Food Andpharma Ingredients,Mr. Bhupesh,7400437812,bhupesh.sirdeshpande@sfa-india.in,27AAHCS2607K1Z7,"601- C, Wi-Fi Park, Plot No.B-3, S.G. Barve Road, Wagle Industrial Estate",Maharashtra,400604
-Sprouted Bajra Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Bajra Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Sprouted Jowar Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Jowar Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Sprouted Ragi Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
+Ragi Powder,81,Functional & Innovative Foods,kannan,9047045009,"Kannan@functionalinnovativefoods.com,business@functionalinnovativefoods.com",33AAICC9720G2ZP,"Door No: 3/1481, Paasuraan Kadu, Karumapuram Post,
 Morepalayam Village, Tiruchengode",Tamil Nadu,637205
-Soya Protein Isolate 90% ( Blpl ),375,Bright Life Care,Ankit Anmol MIshra,8102105550,"ankit.mishra1@brightlifecare.com,Yudhbir.singh@brightlifecare.com",02AAECB5311J1Z6,"BLIFE WH BADDI Khatta No. 572/616, Khasra No. 1799 & 2404/1801, Mohal Thana, Baddi,",Himachal Pradesh,173205
-Vitamin & Mineral Premix - Fortivit-Hd-545,687,Hexagon Nutrition Ltd,,,Gaurav.S@hexagonnutrition.com,27AAACH2359E1ZT,"PLOT NO. 92,P.O UNANDA NAGAR,
-LAKHMAPUR, TAL.DINDORI,",Maharashtra,422202
-Zinc Sulphate ( Blpl ),250,Bright Life Care,Ankit Anmol MIshra,8102105550,"ankit.mishra1@brightlifecare.com,Yudhbir.singh@brightlifecare.com",02AAECB5311J1Z6,"BLIFE WH BADDI Khatta No. 572/616, Khasra No. 1799 & 2404/1801, Mohal Thana, Baddi,",Himachal Pradesh,173205
-Dates Powder - Botanic,310,Botanic Healthcare,MS.SARIKA,9711200043,ops@sarikaventures.com,09AAZCS8775Q1ZM,D-247/1 Sector-63,Uttar Pradesh,201301
+Dates Powder,310,Botanic Healthcare,MS.SARIKA,9711200043,ops@sarikaventures.com,09AAZCS8775Q1ZM,D-247/1 Sector-63,Uttar Pradesh,201301
 Stinging Nettle Leaf Extract,750,Botanic Healthcare,Kamal Garg,9154327237,sales11@botanichealthcare.com,36AAFCB4663C1ZW,"16/1/12 & 13, Street No. 7, Uppal Mandal, Medchal Ida Nacharam, Malkajgiri",Telangana,500076
 L- Citruline Dl Malate,650,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
-Maltodextrin Powder ,46,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
-Marine Collagen ,1150,Inja Wellness Llp,,9920073132,"manasi@injawellness.com,aaditya@injawellness.com,info@injawellness.com,accounts@injawellness.com,operations@injawellness.com",27AAFFI5255G1ZC,"2ND FLOOR, ASHIRWAD IND ESTATE, RAM MANDIR ROAD GOREGAON WEST",Maharashtra,400104
+Maltodextrin Powder�,46,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
+Marine Collagen�,1150,Inja Wellness Llp,,9920073132,"manasi@injawellness.com,aaditya@injawellness.com,info@injawellness.com,accounts@injawellness.com,operations@injawellness.com",27AAFFI5255G1ZC,"2ND FLOOR, ASHIRWAD IND ESTATE, RAM MANDIR ROAD GOREGAON WEST",Maharashtra,400104
 Silicon Dioxide (Aerosil),450,Chemicals Zone,,,warehouse@mediwell.in,02AAPCM3559C1ZL,"Plot No 38, Phase IV, HIMUDA Industrial Township, Bhatolikalan, Baddi",Himachal Pradesh,173205
 Vanilla Trusil,1000,Ganpati Additives,,,baddi@ganpatiadditives.com,02AADCG9308B1Z6,"Ground Floor, 45-48, Modern Complex, Sai Road, Baddi",Himachal Pradesh,173205
 Fortium Tr30 Liquid,,Aries,Mr.Stany Stephen,9074885447,ariesekm@gmail.com,32ABDCA5901H1Z4,"1/510/H, Ground Floor, Kuttikkattu Building, Eroor Road, Thrippunithura,",Kerala,682306
@@ -54,56 +47,48 @@ Gautam Budh Nagar",Uttar Pradesh,201308
 Ashwagandha Extract 3.5 %,510,Herbo Nutra Extract,Amit Kumar,8882112116,amit@herbonutra.com,09AAFCH9959R1ZB,"A-2/65,66,UPSIDC SITE 5, Kasna
 Surajpur Industrial Area
 Gautam Budh Nagar",Uttar Pradesh,201308
-Vitaserve0781 - Kaminds,470,Kaminds Nutrichem Pvt.Ltd,Kishor,,trisha.chakraborty@kaminds.com,08AAICK7975K1ZP,"J-1235-1236, Phase III, Sitapura Industrial Area, sitapur",Rajasthan,302022
-Date Powder ( Pellagic),370,M/S Pellagic Food,,,acc.pellagicfoods@gmail.com,29AAGCP4828G1Z5,"SPL 14, Jigani Industrial Area 2nd Stage, Bengaluru",Karnataka,560105
+Dates Powder,370,M/S Pellagic Food,,,acc.pellagicfoods@gmail.com,29AAGCP4828G1Z5,"SPL 14, Jigani Industrial Area 2nd Stage, Bengaluru",Karnataka,560105
 Pumpkin Seed Oil Extract,680,Herbo Nutra Extract Pvt.Ltd.,Amit Kumar,8882112116,amit@herbonutra.com,09AAFCH9959R1ZB,"A-2/65,66,UPSIDC SITE 5, Kasna
 Surajpur Industrial Area
 Gautam Budh Nagar",Uttar Pradesh,201308
-Inulin {Orafti Hsi},315,Beneo India Pvt.Ltd,Amit Seth,9967050342,amit.Sheth@beneo.com,27AAGCB8019F1ZQ,"Food Park, Plot No 1, Sector KWC, Roadpali Naka,
+Inulin (Orafti HSI),315,Beneo India Pvt.Ltd,Amit Seth,9967050342,amit.Sheth@beneo.com,27AAGCB8019F1ZQ,"Food Park, Plot No 1, Sector KWC, Roadpali Naka,
 Kalamboli Node, Panvel, Raigad",Maharashtra,410218
-Sugar Free (Fos) Fossence P 95,400,Sri Bhagavathi Chemicls,Anirudha Sarkar,8335062766,asarkar@tatachemicals.com,37AAACT4059M1ZY,"23rd Floor, New Cuffe Parade, Off Eastern Freeway, VIOS, Tower, Mumbai",Maharashtra,400037
+(Fos) Fossence P 95,400,Sri Bhagavathi Chemicls,Anirudha Sarkar,8335062766,asarkar@tatachemicals.com,37AAACT4059M1ZY,"23rd Floor, New Cuffe Parade, Off Eastern Freeway, VIOS, Tower, Mumbai",Maharashtra,400037
 Flavour,1950,Flavaroma Flavour And Fragrances,,,sales.west@flavaroma.com,24AAACF7790D1ZQ,"Plot no. 1704/2, Phase IV G.I.D.C, Wadhwan",Gujarat,363035
 Milk Protein Concentration 70%,800,Mahaan Milk Foods Ltd,Mr. Harshit,,harshit@aceinternational.co.in,09AAICM3760E1ZF,"NEAR BPCL GAS PLANT, PLOT NO. B37-41/D31-35 UPSIDC, INDUSTRIAL AREA SALEMPUR",Uttar Pradesh,204102
 Moong Dal Proten,435,Subala Labchem,SALES,8889422022,sales@stdmfoods.com,23AASCS5279E1ZZ,"Sehkari Shit Grah  Rau, Plot Number 2, Rau Cat Road, Shramik Colony, Rau, Indore",Madhya Pradesh,453331
 Dha Veg 10%,990,Botanic Healthcare,Kamal Garg,9154327237,sales11@botanichealthcare.com,36AAFCB4663C1ZW,"16/1/12 & 13, Street No. 7, Uppal Mandal, Medchal Ida Nacharam, Malkajgiri",Telangana,500076
-Almond Powder ,550,Konark Herbals & Healthcare Pvt. Ltd,Vikas,9356842921,"Vikas.thakur@konarkgroup.com,arvind.mathur@konarkgroup.com",02AAICK8142N1ZA,NAHAN ROAD VILL.MOGINAND,Himachal Pradesh,173030
-Beet Root Powder For Nutrimix,320,Himrishi Herbal 2025-26,Rupesh Salamwade,9769455910,sales@drytechindia.com,23AAACD1475H1Z0,"Pandhurna, Nagpur Road, Pandhurna",Madhya Pradesh,480334
+Almond Powder�,550,Konark Herbals & Healthcare Pvt. Ltd,Vikas,9356842921,"Vikas.thakur@konarkgroup.com,arvind.mathur@konarkgroup.com",02AAICK8142N1ZA,NAHAN ROAD VILL.MOGINAND,Himachal Pradesh,173030
+Beet Root Powder,320,Himrishi Herbal 2025-26,Rupesh Salamwade,9769455910,sales@drytechindia.com,23AAACD1475H1Z0,"Pandhurna, Nagpur Road, Pandhurna",Madhya Pradesh,480334
 Wallnut Powder,500,Konark Herbals & Healthcare Pvt. Ltd,Vikas,9356842921,"Vikas.thakur@konarkgroup.com,arvind.mathur@konarkgroup.com",02AAICK8142N1ZA,NAHAN ROAD VILL.MOGINAND,Himachal Pradesh,173030
-Oats Flour ,105,Bagrrys India Pvt Ltd,,,salesorder@bagrrys.com,07AABCB8144N1ZE,"11 to 14, LGF, VASANT SQUARE MALL, PLOT NO A COMMUNITY CENTRE, POCKET V, SECTOR B, VASANT KUNJ",Delhi,110070
-Livsource Vitamin Mineral Vitaserve0837,250,Kaminds Nutrichem Pvt.Ltd,Kishor,,trisha.chakraborty@kaminds.com,08AAICK7975K1ZP,"J-1235-1236, Phase III, Sitapura Industrial Area, sitapur",Rajasthan,302022
-Flavour,2850,See Pold Chemicals ,Madhur Arora,+91 86830 38719,madhur.arora@seapold.com,23ABUPA9898F1Z3,"3/25, behind laxmi hotel, shinde ki chawani",Madhya Pradesh,474001
+Oats Flour�,105,Bagrrys India Pvt Ltd,,,salesorder@bagrrys.com,07AABCB8144N1ZE,"11 to 14, LGF, VASANT SQUARE MALL, PLOT NO A COMMUNITY CENTRE, POCKET V, SECTOR B, VASANT KUNJ",Delhi,110070
+Flavour,2850,See Pold Chemicals�,Madhur Arora,+91 86830 38719,madhur.arora@seapold.com,23ABUPA9898F1Z3,"3/25, behind laxmi hotel, shinde ki chawani",Madhya Pradesh,474001
 Fibersmart - Soluble Tapioca Fiber Syrup,900,1-2 Taste India Pvt.Ltd,Ulaganathan Swarnam,9789091279,ula@12taste.com,33AAPCA8337E1ZM,"No.5-5A, Valluvar Salai, Ramapuram
 Chennai Tamil Nadu",Tamil Nadu,600089
 Beta Sitosterol Extract,1850,Botanic Healthcare,Kamal Garg,9154327237,sales11@botanichealthcare.com,36AAFCB4663C1ZW,"16/1/12 & 13, Street No. 7, Uppal Mandal, Medchal Ida Nacharam, Malkajgiri",Telangana,500076
-Colour:- Apple Green Fcf,1320,Ganpati Additives,,,baddi@ganpatiadditives.com,02AADCG9308B1Z6,"Ground Floor, 45-48, Modern Complex, Sai Road, Baddi",Himachal Pradesh,173205
-Peg 6000,165,Tiwari Pharma,,,warehouse@mediwell.in,02AAPCM3559C1ZL,"Plot No 38, Phase IV, HIMUDA Industrial Township, Bhatolikalan, Baddi",Himachal Pradesh,173205
-Dha 20% Numega,1950,Botanic Healthcare,Kamal Garg,9154327237,sales11@botanichealthcare.com,36AAFCB4663C1ZW,"16/1/12 & 13, Street No. 7, Uppal Mandal, Medchal Ida Nacharam, Malkajgiri",Telangana,500076
+Dha 20%,1950,Botanic Healthcare,Kamal Garg,9154327237,sales11@botanichealthcare.com,36AAFCB4663C1ZW,"16/1/12 & 13, Street No. 7, Uppal Mandal, Medchal Ida Nacharam, Malkajgiri",Telangana,500076
 Natural Vanilla Flavor Powder (Nf 44044 ),1430,Akashit Naturals,Mr. Akash H. Pardeshi,9766196667,akashitnaturals2109@gmail.com,27DOIPP0910P1ZI,"436, Dwarka Niwas, Tq Ashti, Kada,",Maharashtra,414202
 Digesist Mos 01 - Advance Enzyme,1998,Advanced Enzyme,Anupam Nayak,9769214356,anupam@advancedenzymes.com,27AABCA4555E1ZX,"5th Floor, A-WING, Sun Magnetica, LIC, Service Rd, Louis Wadi, Thane West, Thane, Maharashtra",Maharashtra,400604
-Jaggery Powder,68,Devbhomi Agro Organic,Tarun Tomar,,consumersshivalik@gmail.com,09BIMPT7166H1ZH,2,Madhya Pradesh,486888
-Smp (Mahaan),315,Mahaan Milk Foods Ltd,Mr. Harshit,,harshit@aceinternational.co.in,09AAICM3760E1ZF,"NEAR BPCL GAS PLANT, PLOT NO. B37-41/D31-35 UPSIDC, INDUSTRIAL AREA SALEMPUR",Uttar Pradesh,204102
+Skimmed Milk Powder,315,Mahaan Milk Foods Ltd,Mr. Harshit,,harshit@aceinternational.co.in,09AAICM3760E1ZF,"NEAR BPCL GAS PLANT, PLOT NO. B37-41/D31-35 UPSIDC, INDUSTRIAL AREA SALEMPUR",Uttar Pradesh,204102
 Soy Protein Isolate Supro - 620 Ip,510,Solae Company India,Pooja Pairaikar,9136205436,Pooja.Pairaikar@iff.com,27AAHCS9328P1ZH,"No 15-23, National Highway 4B,
 Panvel-JNPT Highway,
 Taluka Panvel",Maharashtra,410206
-Brown Rice Protein Nutrizoe,500,Nutrizo Advancis Healthcare,Chetna Makwana,9510213646,nutrizoadvancis@gmail.com,24AAFCN4472K1Z9,"PLOT NO - 1111, SURVEY NO - 1961, G.I.D.C.,
+Brown Rice Protein 80%,500,Nutrizo Advancis Healthcare,Chetna Makwana,9510213646,nutrizoadvancis@gmail.com,24AAFCN4472K1Z9,"PLOT NO - 1111, SURVEY NO - 1961, G.I.D.C.,
 TALUKA -DHOLKA, DasKroi, Ahmedabad,",Gujarat,387810
-Sodium Laural Sulphate,25,Tiwari Pharma,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
-Chocolate Flavor Rv-675-100-5,1580,Vivanta Food International,,,sales1@vivantafood.com,27AAHCV7909D1Z4,"IInd FLOOR, OFFICE NO.205,LANDMARK CENTER,OPP CITY PRIDE PUNE SATARA ROAD",Maharashtra,411009
-Chocolate Milk Flavor Fa-322-442-1 ,1865,Vivanta Food International,,,sales1@vivantafood.com,27AAHCV7909D1Z4,"IInd FLOOR, OFFICE NO.205,LANDMARK CENTER,OPP CITY PRIDE PUNE SATARA ROAD",Maharashtra,411009
+Chocolate Flavour,1580,Vivanta Food International,,,sales1@vivantafood.com,27AAHCV7909D1Z4,"IInd FLOOR, OFFICE NO.205,LANDMARK CENTER,OPP CITY PRIDE PUNE SATARA ROAD",Maharashtra,411009
 Citric Acid Anhydrous,80,Tiwari Pharma,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
-Vitamin D3 (In Gm),54000,Nutphyt Wellness,Amit Jindal,8699995235,amit@nutphyt.com,06ABIPJ5158R1Z0,"PLOT NO. 362,INDUSTRIAL AREA,PHASE-I",Haryana,134113
+Vitamin D3 (Veg),54000,Nutphyt Wellness,Amit Jindal,8699995235,amit@nutphyt.com,06ABIPJ5158R1Z0,"PLOT NO. 362,INDUSTRIAL AREA,PHASE-I",Haryana,134113
 Al Barakah Date Paste,145,Candor Dates Pvt Ltd,NEERAJ ,78278 75275,Services@gudfood.in,09AAAHU8375C1ZW,"GF , D-221 SECTOR 10",Uttar Pradesh,201301
-Badam Giri ( Almands ),860,Namratha Stockists,,,namratha.tajir17@gmail.com,29AAOFN3562A1Z8,"No 28/1, Madanayakanahalli, Lakshmipura
+Whole Almonds,860,Namratha Stockists,,,namratha.tajir17@gmail.com,29AAOFN3562A1Z8,"No 28/1, Madanayakanahalli, Lakshmipura
 Tumkur Road",Karnataka,562162
-Probiotic Blend (Mosaic),5630,Fido Pharma Pvt.Ltd,,,rituraj@fidopharma.com,06AAECF0417B1ZE,"Second Floor, SCO NO 45, SECTOR 4, PANCHKULA, Panchkula, Haryana",Haryana,134112
 Chondroitin Sulphate,3000,Aushadhi Herbal,,,aushadhiherbal@outlook.com,07AQHPJ7998R1ZK,"B-40, Gali No. 1, West Vinod Nagar Near Manglam Hospital",Delhi,110092
 Potassium Chloride,85,Tiwari Pharma Private Limited,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
 Potassium Citrate,220,Tiwari Pharma Private Limited,,,tiwarichemicals@gmail.Com,02AAHCT0752E1ZT,"KHASRA NO. 821,SCO NO.1,2&3 NEAR RADHASWAMI SATSANG BHAWAN VILL.KARUANA,BADDI",Himachal Pradesh,173205
-Blueberry Powder,1600,Herbo Nutra Extract ,Amit Kumar,8882112116,amit@herbonutra.com,09AAFCH9959R1ZB,"A-2/65,66,UPSIDC SITE 5, Kasna
+Blueberry Powder,1600,Herbo Nutra Extract�,Amit Kumar,8882112116,amit@herbonutra.com,09AAFCH9959R1ZB,"A-2/65,66,UPSIDC SITE 5, Kasna
 Surajpur Industrial Area
 Gautam Budh Nagar",Uttar Pradesh,201308
 Beta Alanine,400,Tanish Enterprises Zirakpur,Deepinder Kathuria,9418456788,udaytanish@gmail.com,03AJDPK2778B1ZM,"Plot Number 234. Village Bhabhat, Vivekanand School Road, Zirakpur, Distt Mohali, Punjab",Punjab,140603
-Soft Brown Sugar ( 80#),74,Dhampure Speciality Sugar,,,shrey@sugarindia.com,09AACCD0719N1ZI,"Vill. Pallawala, Tehsil Dhampur",Uttar Pradesh,246761
+Soft Brown Sugar,74,Dhampure Speciality Sugar,,,shrey@sugarindia.com,09AACCD0719N1ZI,"Vill. Pallawala, Tehsil Dhampur",Uttar Pradesh,246761
 Flavour,3400,Kp Manish Global Ingredients,Kishan,,kishan@kpmanish.com,06AABCL3843N1ZA,"Ground Floor, KILLA NO 7//23/1, 23/2, 24/1, NARELA ROAD, Village Safiabad Pana Paposian, Kundli Industrial Area,",Haryana,131028
 Leutin,5575,Nutphyt Wellness,Amit Jindal,8699995235,amit@nutphyt.com,06ABIPJ5158R1Z0,"PLOT NO. 362,INDUSTRIAL AREA,PHASE-I",Haryana,134113
 Zeaxanthin,5025,Nutphyt Wellness,Amit Jindal,8699995235,amit@nutphyt.com,06ABIPJ5158R1Z0,"PLOT NO. 362,INDUSTRIAL AREA,PHASE-I",Haryana,134113

@@ -114,6 +114,8 @@ def parse_rate(raw):
 def price_band(rate):
     """Show a range, not the exact quoted rate — ±12% around it, sensibly rounded."""
     lo, hi = rate * 0.88, rate * 1.14
+    if rate < 10:
+        return round(lo, 2), round(hi, 2)
     step = 1 if rate < 100 else 5 if rate < 1000 else 50
     return round(lo / step) * step, round(hi / step) * step
 
@@ -159,13 +161,16 @@ def seed_catalogue(con, csv_path=None):
     path = csv_path or CATALOGUE_CSV
     if not os.path.exists(path):
         return
-    with open(path, newline="", encoding="utf-8-sig") as f:
+    # tolerant read: source files carry a mangled ₹ byte, so replace bad bytes
+    # then strip the resulting junk (U+FFFD / control chars) from names.
+    clean = lambda s: re.sub(r"\s+", " ", re.sub(r"[�\x00-\x1f]+", " ", s or "")).strip()
+    with open(path, newline="", encoding="utf-8-sig", errors="replace") as f:
         rows = list(csv.DictReader(f))
     today = date.today().isoformat()
     vendors, ings = {}, {}
     for r in rows:
-        item = (r.get("Item Name") or "").strip()
-        vname = (r.get("Vendor Name") or "").strip()
+        item = clean(r.get("Item Name"))
+        vname = clean(r.get("Vendor Name"))
         if not item or not vname:
             continue
         vkey = vname.lower()
