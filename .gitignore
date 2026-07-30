@@ -1,0 +1,6 @@
+ingrex.db
+ingrex.db-wal
+ingrex.db-shm
+ingrex-*.db
+__pycache__/
+*.pyc

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ingrex",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["ingrex.py"],
+      "port": 8000,
+      "autoPort": true
+    }
+  ]
+}
