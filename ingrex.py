@@ -606,18 +606,98 @@ def is_authed(headers):
     return False
 
 
+LOGIN_CSS = """
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  min-height:100vh;display:grid;place-items:center;padding:24px;overflow:hidden;
+  color:#f2fbf7;background:#04140f;position:relative}
+/* animated liquid backdrop */
+.bg{position:fixed;inset:0;z-index:-2;
+  background:radial-gradient(120% 120% at 20% 10%,#0b3b2b 0%,#062018 45%,#03100c 100%)}
+.blob{position:fixed;z-index:-1;border-radius:50%;filter:blur(60px);opacity:.7;
+  mix-blend-mode:screen;will-change:transform}
+.b1{width:46vmax;height:46vmax;left:-8vmax;top:-10vmax;
+  background:radial-gradient(circle at 30% 30%,#19c98a,#0a6b4a 60%,transparent 72%);
+  animation:drift1 18s ease-in-out infinite}
+.b2{width:40vmax;height:40vmax;right:-10vmax;top:8vmax;
+  background:radial-gradient(circle at 60% 40%,#37e0c0,#0d7a56 55%,transparent 72%);
+  animation:drift2 22s ease-in-out infinite}
+.b3{width:38vmax;height:38vmax;left:18vmax;bottom:-14vmax;
+  background:radial-gradient(circle at 50% 50%,#a8e05a,#3f8a1c 55%,transparent 72%);
+  animation:drift3 26s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(8vmax,6vmax) scale(1.15)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(-7vmax,10vmax) scale(1.1)}}
+@keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(6vmax,-8vmax) scale(1.2)}}
+
+/* liquid glass card */
+.glass{position:relative;width:100%;max-width:400px;padding:44px 38px 38px;
+  border-radius:28px;overflow:hidden;
+  background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.04));
+  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 -1px 0 rgba(255,255,255,.06) inset,
+    0 30px 80px -20px rgba(0,0,0,.6),0 8px 24px -12px rgba(0,0,0,.5)}
+/* moving specular sheen */
+.glass::before{content:"";position:absolute;top:-60%;left:-30%;width:80%;height:220%;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.28) 50%,transparent 70%);
+  transform:rotate(8deg);animation:sheen 7s ease-in-out infinite;pointer-events:none}
+@keyframes sheen{0%{left:-40%}55%,100%{left:130%}}
+
+.brand{font-size:34px;font-weight:800;letter-spacing:-.03em;color:#fff}
+.brand span{color:#4fe0a6}
+.tag{display:inline-block;margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:#bff3dd;background:rgba(79,224,166,.14);
+  border:1px solid rgba(79,224,166,.3);padding:5px 12px;border-radius:20px}
+.lead{margin:20px 0 24px;font-size:14px;line-height:1.55;color:rgba(233,251,244,.72)}
+form{display:flex;flex-direction:column;gap:14px}
+.field{position:relative}
+.field svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.6}
+input{width:100%;padding:15px 16px 15px 46px;font-size:15px;color:#fff;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);
+  border-radius:14px;outline:0;transition:border-color .18s,box-shadow .18s,background .18s}
+input::placeholder{color:rgba(233,251,244,.5)}
+input:focus{border-color:rgba(79,224,166,.7);background:rgba(255,255,255,.12);
+  box-shadow:0 0 0 4px rgba(79,224,166,.16)}
+button{padding:15px;font-size:15px;font-weight:700;color:#04140f;cursor:pointer;
+  border:0;border-radius:14px;
+  background:linear-gradient(135deg,#5cf0b4,#12b884);
+  box-shadow:0 8px 24px -8px rgba(18,184,132,.7),0 1px 0 rgba(255,255,255,.4) inset;
+  transition:transform .08s,filter .18s}
+button:hover{filter:brightness(1.06)}button:active{transform:translateY(1px)}
+.err{margin-bottom:16px;padding:11px 14px;font-size:13px;font-weight:600;color:#ffd7c2;
+  background:rgba(214,90,40,.18);border:1px solid rgba(214,90,40,.4);border-radius:12px}
+.foot{margin-top:22px;font-size:12px;color:rgba(233,251,244,.5);text-align:center}
+@media(prefers-reduced-motion:reduce){.blob,.glass::before{animation:none}}
+@media(max-width:440px){.glass{padding:36px 26px}.brand{font-size:30px}}
+"""
+
+
 def login_page(err=""):
-    return page("Sign in", f"""
-      <h1>ingre<span style='color:var(--acc)'>x</span> · pilot access</h1>
-      <p class=mut>This preview is invite-only. Enter the access password your
-         Ingrex contact shared. You'll stay signed in on this device.</p>
-      <div class=card style='max-width:380px'>
-        {f"<p class=up>{E(err)}</p>" if err else ""}
-        <form class=filters method=post action='/login'>
-          <input type=password name=pw placeholder='Access password' required
-                 autofocus style='flex:1' autocomplete=current-password>
-          <button>Enter</button>
-        </form></div>""")
+    lock = ("<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke='%23bff3dd' "
+            "stroke-width=2 stroke-linecap=round><rect x=4 y=11 width=16 height=10 rx=2/>"
+            "<path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg>").replace("%23", "#")
+    return (f"<!doctype html><html lang=en><meta charset=utf-8>"
+            f"<meta name=viewport content='width=device-width,initial-scale=1'>"
+            f"<title>Sign in · Ingrex</title><style>{LOGIN_CSS}</style>"
+            f"<div class=bg></div><div class='blob b1'></div>"
+            f"<div class='blob b2'></div><div class='blob b3'></div>"
+            f"<div class=glass>"
+            f"<div class=brand>ingre<span>x</span></div>"
+            f"<div class=tag>Nutraceutical sourcing · Pilot</div>"
+            f"<p class=lead>Invite-only preview. Enter the access password your Ingrex "
+            f"contact shared — you'll stay signed in on this device.</p>"
+            f"{f'<div class=err>{E(err)}</div>' if err else ''}"
+            f"<form method=post action='/login'>"
+            f"<div class=field>{lock}"
+            f"<input type=password name=pw placeholder='Access password' required autofocus "
+            f"autocomplete=current-password></div>"
+            f"<button>Enter portal</button></form>"
+            f"<div class=foot>Ingrex · B2B ingredient intelligence</div>"
+            f"</div></html>").encode()
 
 
 # ---------- server ----------
