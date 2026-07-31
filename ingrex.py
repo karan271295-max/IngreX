@@ -218,7 +218,8 @@ def _pg_sql(sql):
         s = (re.sub(r"^insert or replace into", "INSERT INTO", s, flags=re.I) +
              " ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name,company=EXCLUDED.company,"
              "role=EXCLUDED.role,gst=EXCLUDED.gst,city=EXCLUDED.city,"
-             "completed=EXCLUDED.completed,created=EXCLUDED.created")
+             "completed=EXCLUDED.completed,created=EXCLUDED.created,"
+             "email=COALESCE(EXCLUDED.email,profile.email)")
     elif low.startswith("insert into"):
         m = re.match(r"insert into (\w+)", s, re.I)
         if m and m.group(1).lower() in _PG_ID_TABLES:
@@ -447,10 +448,11 @@ def ensure_invites(con):
 
 CSS = """
 :root{
-  --ink:#111512;--body:#3d4a44;--mut:#8a968f;--line:#ececef;--line2:#f5f6f5;
-  --bg:#fbfbfa;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#eef5f1;
+  --ink:#111512;--body:#3d4a44;--mut:#7d8a83;--line:#e2e8e4;--line2:#f0f3f1;
+  /* the page sits a clear step below the cards — at #fbfbfa vs #fff they read flat */
+  --bg:#f2f5f3;--card:#fff;--acc:#0d7a56;--acc-d:#0a5d41;--acc-t:#eaf3ee;
   --sb:#171c1a;--up:#bf5327;--down:#0d7a56;--gold:#c99a2e;
-  --shadow:0 1px 2px rgba(17,21,18,.04),0 1px 1px rgba(17,21,18,.03);
+  --shadow:0 1px 2px rgba(17,21,18,.05),0 1px 1px rgba(17,21,18,.03);
   --radius:12px;
 }
 *{box-sizing:border-box}
@@ -601,7 +603,7 @@ a.av{text-decoration:none}
 
 /* watchlist star on cards */
 .iwrap{position:relative}
-.star{position:absolute;top:10px;right:10px;z-index:2;width:30px;height:30px;border-radius:50%;
+.star{position:absolute;top:10px;right:10px;z-index:2;width:25px;height:25px;border-radius:50%;
   display:grid;place-items:center;font-size:15px;text-decoration:none;color:#b9c6bf;
   background:rgba(255,255,255,.92);border:1px solid var(--line);box-shadow:var(--shadow)}
 .star:hover{color:var(--gold);border-color:#f0d9a0}
@@ -633,6 +635,20 @@ a.av{text-decoration:none}
 .stat .l{color:var(--mut);font-size:12px;font-weight:600}
 .stat .v{font-size:23px;font-weight:700;color:var(--ink);letter-spacing:-.025em;margin:6px 0 5px}
 .stat .d{font-size:11.5px;color:var(--mut)}.stat .d b{color:var(--acc);font-weight:650}
+/* actionable strip — one dense row, every cell is a link somewhere useful */
+.actionbar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-bottom:16px;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.act{display:flex;flex-direction:column;gap:2px;padding:11px 14px;background:var(--card);
+  color:inherit;transition:background .14s}
+.act:hover{background:var(--acc-t);color:inherit}
+.act .al{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--mut)}
+.act .av2{font-size:14.5px;font-weight:700;color:var(--ink);letter-spacing:-.015em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act .ad{font-size:11.5px;color:var(--mut);font-weight:600}
+.act .ad.down{color:var(--down)}.act .ad.up{color:var(--up)}
+@media(max-width:900px){.actionbar{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.actionbar{grid-template-columns:1fr}}
 .panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 18px 6px;
   box-shadow:var(--shadow);margin-bottom:14px}
 .panel.pad{padding:18px}
@@ -644,28 +660,28 @@ a.av{text-decoration:none}
   font-size:12.5px;font-weight:600;color:var(--body);cursor:pointer}
 .pill:hover{border-color:#cfe0d7;color:var(--acc-d)}
 .pill.on{background:var(--acc);color:#fff;border-color:transparent}
-.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
-a.icard{display:block;border:1px solid var(--line);border-radius:16px;padding:12px 12px 14px;
+.icards{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}
+a.icard{display:block;border:1px solid var(--line);border-radius:12px;padding:10px 11px 11px;
   color:inherit;background:#fff;transition:box-shadow .16s,border-color .16s,transform .16s}
 a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
   box-shadow:0 14px 30px -14px rgba(15,31,26,.28)}
-.icard{padding:15px 16px;border-left:3px solid var(--cc,var(--line));
-  background:linear-gradient(180deg,color-mix(in srgb,var(--cc) 5%,#fff),#fff 60%)}
+.icard{padding:11px 13px 12px;border-left:3px solid var(--cc,var(--line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cc) 4%,#fff),#fff 55%)}
 .icard:hover{border-color:color-mix(in srgb,var(--cc) 40%,var(--line));
   border-left-color:var(--cc)}
-.icard .irate{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink)}
+.icard .irate{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--ink)}
 .icard .irate .st{color:var(--gold);letter-spacing:.5px}
 .icard .irate .new{color:var(--mut);font-weight:600}
-.icard .icat{font-size:11px;font-weight:700;letter-spacing:.02em;margin-top:8px;
+.icard .icat{font-size:9.5px;font-weight:700;letter-spacing:.04em;margin-top:5px;
   color:var(--cc);text-transform:uppercase}
-.icard .inm{font-size:15.5px;font-weight:700;color:var(--ink);line-height:1.3;margin:4px 0 2px;
-  min-height:2.4em}
-.icard .priceband{display:inline-block;font-size:15px;font-weight:800;color:var(--ink);
-  margin-top:9px;padding:5px 11px;border-radius:9px;
+.icard .inm{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.28;margin:2px 0 1px;
+  min-height:2.55em}
+.icard .priceband{display:inline-block;font-size:13.5px;font-weight:800;color:var(--ink);
+  margin-top:6px;padding:4px 9px;border-radius:8px;
   background:color-mix(in srgb,var(--cc) 12%,#fff);
   border:1px solid color-mix(in srgb,var(--cc) 24%,#fff)}
 .icard .priceband .unit{font-size:12px;font-weight:500;color:var(--mut)}
-.iwrap .star{top:14px;right:14px}
+.iwrap .star{top:9px;right:9px}
 .itable td{vertical-align:middle}.itable tbody tr:hover{background:var(--acc-t)}
 .itable .starcell{width:34px;text-align:center;padding-right:0}
 .itable tr.crow td.starcell{border-left:3px solid var(--cc,var(--line))}
@@ -674,14 +690,14 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .star2:hover{color:var(--gold)}.star2.on{color:var(--gold)}
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
 .icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
-.icard .isup{color:var(--mut);font-size:12.5px;font-weight:600;margin-top:3px}
-.icard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;
+.icard .isup{color:var(--mut);font-size:11.5px;font-weight:600;margin-top:2px}
+.icard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;
   padding-top:10px;border-top:1px solid var(--line2)}
-.icard .ibadge{font-size:11px;font-weight:800;padding:4px 9px;border-radius:20px}
+.icard .ibadge{font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px}
 .icard .ibadge.down{background:var(--acc-t);color:var(--acc-d)}
 .icard .ibadge.up{background:#fbe9df;color:var(--up)}
 .icard .ibadge.flat{background:var(--bg);color:var(--mut)}
-.icard .iupd{font-size:11px;color:var(--mut);font-weight:600}
+.icard .iupd{font-size:10px;color:var(--mut);font-weight:600}
 .xbtn{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;background:#fff;
   color:var(--up);border:1px solid #e6c3ad;cursor:pointer}
 .xbtn:hover{background:#fbe9df}
@@ -884,15 +900,22 @@ footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid va
 }
 
 /* trial strip + plans + account */
-.trial{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;
-  padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;
-  background:linear-gradient(90deg,#e7f4ee,#f4f7f5);border:1px solid #d7e8df;color:var(--acc-d)}
-.trial.warn{background:linear-gradient(90deg,#fbe9df,#fdf5f0);border-color:#e6c3ad;color:#b4541c}
-.trial b{font-weight:800}
-.trial a{margin-left:auto;font-weight:800;white-space:nowrap}
-.trial .pin{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
-  padding:3px 8px;border-radius:20px;background:rgba(13,122,86,.12)}
-.trial.warn .pin{background:rgba(180,84,28,.12)}
+.trial{display:flex;align-items:center;gap:11px;margin-bottom:16px;padding:9px 10px 9px 12px;
+  border-radius:10px;font-size:12.5px;font-weight:600;color:var(--body);
+  background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow)}
+.trial .bar{flex:none;width:3px;align-self:stretch;border-radius:3px;background:var(--acc);
+  margin:-1px 2px -1px 0}
+.trial.warn .bar{background:var(--up)}
+.trial b{font-weight:750;color:var(--ink)}
+.trial .pin{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;
+  padding:3px 8px;border-radius:5px;background:var(--acc-t);color:var(--acc-d);white-space:nowrap}
+.trial.warn .pin{background:#fbe9df;color:#b4541c}
+.trial a{margin-left:auto;font-weight:700;white-space:nowrap;padding:5px 11px;border-radius:7px;
+  border:1px solid var(--line);color:var(--acc-d);transition:background .14s}
+.trial a:hover{background:var(--acc-t)}
+.trial.warn a{border-color:#e6c3ad;color:#b4541c}
+.trial.warn a:hover{background:#fbe9df}
+@media(max-width:620px){.trial{flex-wrap:wrap}.trial a{margin-left:0;width:100%;text-align:center}}
 .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}
 @media(max-width:900px){.plans{grid-template-columns:1fr}}
 .plan{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);
@@ -1157,13 +1180,13 @@ def trial_strip(con):
         return ""
     if left > 0:
         warn = " warn" if left <= 7 else ""
-        return (f"<div class='trial{warn}'><span class=pin>Free trial</span>"
-                f"<span><b>{left} day{'' if left == 1 else 's'} left</b> of your first month — "
-                f"full access, no card needed.</span>"
-                f"<a href='/plans'>See plans →</a></div>")
-    return ("<div class='trial warn'><span class=pin>Trial ended</span>"
-            "<span>Your free month is over. Pick a plan to keep sourcing without limits.</span>"
-            "<a href='/plans'>Choose a plan →</a></div>")
+        return (f"<div class='trial{warn}'><i class=bar></i><span class=pin>Free trial</span>"
+                f"<span><b>{left} day{'' if left == 1 else 's'} left</b> — full access, "
+                f"no card needed.</span>"
+                f"<a href='/plans'>See plans</a></div>")
+    return ("<div class='trial warn'><i class=bar></i><span class=pin>Trial ended</span>"
+            "<span>Pick a plan to keep sourcing without limits.</span>"
+            "<a href='/plans'>Choose a plan</a></div>")
 
 
 def page(con, title, body, active="dashboard", q=""):
@@ -1454,25 +1477,35 @@ def category_pills(con, active=""):
     return f"<div class=pills>{pills}</div>"
 
 
-def stat_cards(con):
-    ing = con.execute("SELECT COUNT(*) n FROM ingredient").fetchone()["n"]
-    ven = con.execute("SELECT COUNT(*) n FROM vendor").fetchone()["n"]
-    verified = con.execute(
-        "SELECT COUNT(*) n FROM vendor WHERE gst IS NOT NULL AND gst!=''").fetchone()["n"]
-    mv = moves_map(con)
+def action_bar(con, rows, mv, wl=frozenset()):
+    """What a buyer can act on right now. Replaces the old vanity KPI row —
+    catalogue totals told nobody anything they could do something about."""
+    by_id = {r["id"]: r for r in rows}
+    # cheapest win: the watched item that fell hardest, else the market's biggest faller
+    fallers = sorted(((i, p) for i, p in mv.items() if p < 0), key=lambda t: t[1])
+    watched_moves = [(i, p) for i, p in fallers if i in wl]
+    pick = (watched_moves or fallers or [None])[0]
+    open_reqs = con.execute(
+        "SELECT COUNT(*) n FROM request WHERE status!='Closed'").fetchone()["n"]
     easing = sum(1 for p in mv.values() if p < 0)
-    rising = sum(1 for p in mv.values() if p > 0)
-    return f"""<div class=stats>
-      <div class=stat><div class=l>Ingredients to source</div><div class=v>{ing}</div>
-        <div class=d>ready to compare</div></div>
-      <div class=stat><div class=l>Verified suppliers</div><div class=v>{ven}</div>
-        <div class=d><b>{verified}</b> with GST on file</div></div>
-      <div class=stat><div class=l>Prices easing</div>
-        <div class=v><span class=down>{easing}</span></div>
-        <div class=d>buying opportunities this month</div></div>
-      <div class=stat><div class=l>Prices rising</div>
-        <div class=v><span class=up>{rising}</span></div>
-        <div class=d>watch before you buy</div></div></div>"""
+
+    items = []
+    if pick and pick[0] in by_id:
+        r = by_id[pick[0]]
+        items.append((f"/ingredient/{r['id']}", "Best move today",
+                      f"{E(r['name'])[:34]}", f"▼ {abs(pick[1]):.1f}%", "down"))
+    items.append(("/search", "Prices easing", f"{easing} ingredient{'' if easing == 1 else 's'}",
+                  "this month", ""))
+    items.append(("/watchlist", "Your watchlist",
+                  f"{len(wl)} tracked" if wl else "Nothing tracked yet",
+                  "Manage" if wl else "Add one", ""))
+    items.append(("/requests", "Sourcing requests",
+                  f"{open_reqs} open", "Community board", ""))
+    return "<div class=actionbar>" + "".join(
+        f"<a class=act href='{href}'><span class=al>{lab}</span>"
+        f"<span class=av2>{val}</span>"
+        f"<span class='ad {cls}'>{sub}</span></a>"
+        for href, lab, val, sub, cls in items) + "</div>"
 
 
 def top_suppliers(con, limit=3):
@@ -1520,12 +1553,12 @@ def view_dashboard(con, wl=frozenset(), trend_sel=""):
       {ticker(con)}
       <div class=hi><h1>{greeting()}, {E(who)} 👋</h1>
         <div class=sub>Here's what's happening with your sourcing today.</div></div>
-      {stat_cards(con)}
+      {action_bar(con, rows, mv, wl)}
       <div class='panel pad'>
         <div class=ph><h3>Find ingredients. Compare. Source smart.</h3>
           <a href='/search'>View all →</a></div>
         {category_pills(con)}
-        <div class=icards>{"".join(icard(r, wl, "/", mv) for r in rows[:10])}</div>
+        <div class=icards>{"".join(icard(r, wl, "/", mv) for r in rows[:8])}</div>
       </div>
       <div class=duo>
         <div class='panel pad'>
@@ -2567,6 +2600,7 @@ def signup_account(con, name, email, company, verified=False):
     con.execute("INSERT INTO profile(code,name,company,role,gst,city,completed,created,email) "
                 "VALUES(?,?,?,'','','',0,?,?)", (code, name[:80], company[:120], today, email))
     con.commit()
+    account_changed()
     return code
 
 
@@ -2652,11 +2686,24 @@ def profile_done(con, code):
 
 
 def account(con):
-    """Profile row for the signed-in account, or None (admin / supplier / open dev)."""
+    """Profile row for the signed-in account, or None (admin / supplier / open dev).
+
+    Memoised per request: the trial banner and the avatar menu both need it on
+    every single page, and each miss is a round trip to a remote database."""
     ident = current()
     if not ident:
         return None
-    return con.execute("SELECT * FROM profile WHERE code=?", (ident["code"],)).fetchone()
+    hit = getattr(CTX, "acct", None)
+    if hit is not None and hit[0] == ident["code"]:
+        return hit[1]
+    row = con.execute("SELECT * FROM profile WHERE code=?", (ident["code"],)).fetchone()
+    CTX.acct = (ident["code"], row)
+    return row
+
+
+def account_changed():
+    """Drop the per-request profile memo after any write to it."""
+    CTX.acct = None
 
 
 def _days_since(iso):
@@ -2918,12 +2965,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # costs a round trip each behind Render's TLS terminator. Every response below
     # must send a Content-Length (or the client waits for EOF that never comes).
     protocol_version = "HTTP/1.1"
+    # ...and an idle keep-alive socket otherwise pins a thread forever. A browser
+    # opens ~6 connections per tab, so without this they pile up on a small dyno.
+    timeout = 15
 
     def _send(self, body, code=200, ctype="text/html; charset=utf-8", cache="", extra=()):
         # pages are 25-50KB of repetitive markup; gzip cuts that ~7x on the wire
         gz = len(body) > 900 and "gzip" in self.headers.get("Accept-Encoding", "")
         if gz:
-            body = gzip.compress(body, 5)
+            body = gzip.compress(body, 1)   # level 1: ~same ratio on HTML, far less CPU
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         if gz:
@@ -3009,6 +3059,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             gated = gate_active(con)
             ident = identity(con, self.headers) if gated else None
             CTX.ident = ident
+            CTX.acct = None
             if url.path == "/login":
                 return self._send(login_page(prefill=params.get("code", [""])[0][:64]))
             if url.path == "/signup":
@@ -3051,15 +3102,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if ident and not is_admin() and not is_supplier() and not profile_done(con, ident["code"]):
                 saved = read_prof(self.headers)
                 if saved:
+                    old = con.execute("SELECT email, created FROM profile WHERE code=?",
+                                      (ident["code"],)).fetchone()
                     con.execute(
                         "INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,"
-                        "completed,created) VALUES(?,?,?,?,?,?,1,?)",
+                        "completed,created,email) VALUES(?,?,?,?,?,?,1,?,?)",
                         (ident["code"], saved["name"], saved.get("company", ""),
                          saved.get("role", ""), saved.get("gst", ""), saved.get("city", ""),
-                         date.today().isoformat()))
+                         (old["created"] if old else None) or date.today().isoformat(),
+                         old["email"] if old else None))
                     con.execute("UPDATE invite SET note=? WHERE code=?",
                                 (saved["name"], ident["code"]))
                     con.commit()
+                    account_changed()
                 elif url.path != "/welcome":
                     return self._redirect("/welcome")
                 else:
@@ -3108,6 +3163,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         finally:
             con.close()
             CTX.ident = None
+            CTX.acct = None
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
@@ -3118,6 +3174,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             gated = gate_active(con)
             ident = identity(con, self.headers) if gated else None
             CTX.ident = ident
+            CTX.acct = None
             if path == "/login":
                 code = urllib.parse.parse_qs(body).get("code", [""])[0].strip()[:64]
                 row = con.execute("SELECT * FROM invite WHERE code=? AND revoked=0",
@@ -3153,12 +3210,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         and len(d["gst"]) == 15 and d["city"]):
                     return self._send(view_welcome(
                         con, ident["code"], "Please complete every field (GSTIN is 15 characters).", d), 400)
+                # keep the signup email / plan: a bare REPLACE would blank the row's
+                # other columns for anyone who arrived via Google or self-serve signup
+                old = con.execute("SELECT email, created FROM profile WHERE code=?",
+                                  (ident["code"],)).fetchone()
                 con.execute("INSERT OR REPLACE INTO profile"
-                            "(code,name,company,role,gst,city,completed,created) VALUES(?,?,?,?,?,?,1,?)",
+                            "(code,name,company,role,gst,city,completed,created,email) "
+                            "VALUES(?,?,?,?,?,?,1,?,?)",
                             (ident["code"], d["name"], d["company"], d["role"], d["gst"],
-                             d["city"], date.today().isoformat()))
+                             d["city"], (old["created"] if old else None) or date.today().isoformat(),
+                             old["email"] if old else None))
                 con.execute("UPDATE invite SET note=? WHERE code=?", (d["name"], ident["code"]))
                 con.commit()
+                account_changed()
                 return self._redirect("/", prof_cookie(d))   # survives DB resets
             if path == "/requests":
                 f = urllib.parse.parse_qs(body)
@@ -3201,6 +3265,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                  g("phone")[:20], ident["code"]))
                     con.execute("UPDATE invite SET note=? WHERE code=?", (name, ident["code"]))
                     con.commit()
+                    account_changed()
                     return self._redirect("/account?msg=" + urllib.parse.quote("Details saved."),
                                           prof_cookie(d))   # survives DB resets
                 return self._redirect("/account")
@@ -3213,6 +3278,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     con.execute("UPDATE profile SET plan=?, cycle=? WHERE code=?",
                                 (plan, cycle, ident["code"]))
                     con.commit()
+                    account_changed()
                     return self._redirect("/plans?msg=" + urllib.parse.quote(
                         f"{plan_name(plan)} selected, billed {cycle}. Our team will confirm by "
                         f"email before anything is charged — nothing is billed today."))
@@ -3353,9 +3419,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         finally:
             con.close()
             CTX.ident = None
+            CTX.acct = None
+
+    def handle_one_request(self):
+        """Time each request so slow pages can be diagnosed from the host's logs:
+        big server ms => the database; small server ms but a slow page => network,
+        TLS or a cold start on the host."""
+        t0 = time.time()
+        super().handle_one_request()
+        self._ms = (time.time() - t0) * 1000
 
     def log_message(self, fmt, *a):
-        sys.stderr.write("%s %s\n" % (self.address_string(), fmt % a))
+        ms = getattr(self, "_ms", None)
+        tail = f" {ms:.0f}ms" if ms else ""
+        sys.stderr.write("%s %s%s\n" % (self.address_string(), fmt % a, tail))
 
 
 def demo():
@@ -3420,7 +3497,12 @@ def demo():
 
     assert view_dashboard(con)
     assert view_search(con, {"q": ["x"], "maxp": ["abc"], "kind": ["../etc"]})
-    assert b"Good " in view_dashboard(con) and b"stat" in view_dashboard(con)
+    assert b"Good " in view_dashboard(con) and b"actionbar" in view_dashboard(con)
+    # the strip points at things a buyer can act on, not catalogue vanity totals
+    dash = view_dashboard(con)
+    for target in (b"/watchlist", b"/requests", b"/search"):
+        assert target in dash, f"action bar links to {target}"
+    assert b"Ingredients to source" not in dash, "vanity KPI row is gone"
     assert view_vendors(con)
 
     # new pages render; ingredient shows material make
@@ -3463,12 +3545,14 @@ def demo():
     con.execute("INSERT INTO invite(code,note,vendor_id,created) VALUES('SUP1','V1',1,'d')")
     con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('GATE','x',0,'d')")
     con.commit()  # ensure gate active
+    CTX.acct = None
     CTX.ident = identity(con, {"Cookie": f"{COOKIE}=SUP1.{sign_code('SUP1')}"})
     assert is_supplier() and supplier_vid() == 1
     assert can_edit_vendor(con, 1) is True and can_edit_vendor(con, 2) is False
     assert b"Your listing" in view_vendor(con, 1), "supplier sees own-listing framing"
     assert b"/admin/offer/del" in view_vendor(con, 1), "supplier can remove ingredients"
     CTX.ident = None
+    CTX.acct = None
     con.execute("DELETE FROM invite WHERE code IN ('SUP1','GATE')")
     con.commit()
 
@@ -3478,6 +3562,7 @@ def demo():
                 " VALUES('BUY1','Riya','Acme','Brand / Client','G','Pune',1,?)",
                 (date.today().isoformat(),))
     con.commit()
+    CTX.acct = None
     CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUY1.{sign_code('BUY1')}"})
     assert subscription(con) == ("", "", TRIAL_DAYS), "fresh account gets a full free month"
     assert b"Free trial" in view_account(con), "account page shows trial status"
@@ -3486,11 +3571,13 @@ def demo():
     old = date.fromordinal(date.today().toordinal() - (TRIAL_DAYS + 5)).isoformat()
     con.execute("UPDATE profile SET created=? WHERE code='BUY1'", (old,))
     con.commit()
+    account_changed()
     assert subscription(con)[2] == 0, "trial expires after TRIAL_DAYS"
     assert b"Trial ended" in trial_strip(con).encode()
     # picking a plan clears the banner and shows on both plan + account pages
     con.execute("UPDATE profile SET plan='growth', cycle='yearly' WHERE code='BUY1'")
     con.commit()
+    account_changed()
     assert subscription(con)[:2] == ("growth", "yearly")
     assert trial_strip(con) == "", "paid account sees no trial banner"
     assert b"Your current plan" in view_plans(con) and b"Growth" in view_account(con)
@@ -3498,6 +3585,7 @@ def demo():
     # yearly is cheaper per month than monthly on every priced tier
     assert all(yr < mo for _, _, mo, yr, *_ in PLANS if mo), "yearly must undercut monthly"
     CTX.ident = None
+    CTX.acct = None
     con.execute("DELETE FROM invite WHERE code='BUY1'")
     con.execute("DELETE FROM profile WHERE code='BUY1'")
     con.commit()
@@ -3516,6 +3604,24 @@ def demo():
     con.commit()
     assert signup_account(con, "Arjun", "arjun@nutraform.com", "X") != code1, "revoked => new code"
     assert EMAIL_RE.match("a@b.co") and not EMAIL_RE.match("nope@nodot")
+    # finishing onboarding must not blank the email the signup stored
+    code2 = signup_account(con, "Dev", "dev@nutraform.com", "Nutraform", verified=True)
+    con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,"
+                "completed,created,email) VALUES(?,?,?,?,?,?,1,?,?)",
+                (code2, "Dev", "Nutraform", "Trader", "G" * 15, "Pune",
+                 date.today().isoformat(),
+                 con.execute("SELECT email FROM profile WHERE code=?", (code2,)).fetchone()["email"]))
+    con.commit()
+    assert con.execute("SELECT email FROM profile WHERE code=?",
+                       (code2,)).fetchone()["email"] == "dev@nutraform.com", "email survives onboarding"
+    # the per-request profile memo serves one query, then clears on write
+    CTX.acct = None
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}={code2}.{sign_code(code2)}"})
+    assert account(con) is account(con), "second read comes from the memo"
+    account_changed()
+    assert getattr(CTX, "acct", None) is None, "a profile write drops the memo"
+    CTX.ident = None
+    CTX.acct = None
     # Google CSRF token: signed, and not forgeable by editing the timestamp
     st = oauth_state()
     assert oauth_state_ok(st) and not oauth_state_ok(st.replace(".", "x.", 1))
@@ -3568,11 +3674,13 @@ def demo():
     con.commit()
     assert identity(con, {"Cookie": good}) is None, "revoked code denied"
     # admin view + presence-aware rendering via CTX
+    CTX.acct = None
     CTX.ident = identity(con, {"Cookie": admin_c})
     assert is_admin() and b"Online now" in view_admin(con) and b"Admin" in view_dashboard(con)
     assert b"Boss" in view_dashboard(con), "greeting uses the signed-in user's name"
     assert b"/logout" in view_dashboard(con), "logout button present"
     CTX.ident = None
+    CTX.acct = None
 
     # onboarding: profile gate + wizard render, then completion
     assert not profile_done(con, "CODE1")
@@ -3593,6 +3701,7 @@ def demo():
     con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,completed,created)"
                 " VALUES('BUY1','X','Y','Trader','g','c',1,'d')")
     con.commit()
+    CTX.acct = None
     CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUY1.{sign_code('BUY1')}"})
     assert gate_active(con) and can_review(con) is False, "seller cannot review"
     con.execute("UPDATE profile SET role='Brand / Client' WHERE code='BUY1'")
@@ -3600,6 +3709,7 @@ def demo():
     assert can_review(con) is True, "buyer can review"
     assert post_rate(con, "vendor_id=1&score=5&note=ok")[0] == 1, "buyer post accepted"
     CTX.ident = None
+    CTX.acct = None
     con.execute("DELETE FROM invite WHERE code='BUY1'")
     con.execute("DELETE FROM profile WHERE code='BUY1'")
     con.commit()
