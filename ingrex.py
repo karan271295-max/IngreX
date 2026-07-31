@@ -259,10 +259,13 @@ class _PgConn:
         return _PgCursor(self.raw, sql, params)
 
     def executemany(self, sql, seq):
+        """Batched: one round trip per page instead of per row. Seeding sends
+        hundreds of price points, and a per-row loop to a hosted database turns
+        first boot into minutes."""
+        from psycopg2.extras import execute_batch
         cur = self.raw.cursor()
         s, _ = _pg_sql(sql)
-        for p in seq:
-            cur.execute(s, tuple(p))
+        execute_batch(cur, s, [tuple(p) for p in seq], page_size=200)
         cur.close()
 
     def executescript(self, script):
@@ -4116,8 +4119,16 @@ if __name__ == "__main__":
     if "--test" in sys.argv:
         demo()
     else:
-        init_db()
         port = int(sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PORT", 8000))
         host = os.environ.get("HOST", "0.0.0.0")  # bind all interfaces so hosts can reach it
-        print(f"ingrex on http://{host}:{port}  (db: {DB})")
-        http.server.ThreadingHTTPServer((host, port), Handler).serve_forever()
+        # Bind BEFORE touching the database. Seeding a fresh Postgres is thousands
+        # of round trips, and a host that probes for an open port gives up long
+        # before that finishes. Constructing the server listens immediately, so the
+        # port is open while we seed; early requests wait in the accept backlog.
+        srv = http.server.ThreadingHTTPServer((host, port), Handler)
+        print(f"ingrex listening on http://{host}:{port}", flush=True)
+        t0 = time.time()
+        init_db()
+        print(f"db ready in {time.time() - t0:.1f}s "
+              f"({'postgres' if PG else DB})", flush=True)
+        srv.serve_forever()
