@@ -20,7 +20,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 # Invite-only gate. Access needs an invite code (see ensure_invites): set
 # INGREX_ADMIN_CODE (master admin) and optionally INGREX_INVITES on the host.
@@ -46,6 +46,21 @@ PUBLIC_BASE_URL = os.environ.get("INGREX_BASE_URL", "").strip().rstrip("/")
 def oauth_redirect_uri(proto="https", host=""):
     base = PUBLIC_BASE_URL or f"{proto}://{host}"
     return f"{base}/auth/google/callback"
+
+# Every buyer here is in India, but the host container runs on its own clock
+# (Render's US regions are hours behind IST). Using the server's local time made
+# the dashboard say "Good morning" at 10pm and stamped rows with the wrong
+# calendar day. All dates and greetings go through these two helpers.
+IST = timezone(timedelta(hours=5, minutes=30))   # India has no DST
+
+
+def local_now():
+    return datetime.now(IST)
+
+
+def local_today():
+    return local_now().date()
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "ingrex.db")
@@ -177,7 +192,7 @@ def price_band(rate):
 
 
 def months(n=12):
-    y, m = date.today().year, date.today().month
+    y, m = local_today().year, local_today().month
     out = []
     for i in range(n - 1, -1, -1):
         mm, yy = m - i, y
@@ -356,7 +371,7 @@ def seed_catalogue(con, csv_path=None):
     clean = lambda s: re.sub(r"\s+", " ", re.sub(r"[�\x00-\x1f]+", " ", s or "")).strip()
     with open(path, newline="", encoding="utf-8-sig", errors="replace") as f:
         rows = list(csv.DictReader(f))
-    today = date.today().isoformat()
+    today = local_today().isoformat()
     vendors, ings = {}, {}
     for r in rows:
         item = clean(r.get("Item Name"))
@@ -441,7 +456,7 @@ def ensure_invites(con):
         for col, decl in (("phone", "TEXT"), ("plan", "TEXT DEFAULT ''"),
                           ("cycle", "TEXT DEFAULT ''"), ("email", "TEXT")):
             con.execute(f"ALTER TABLE profile ADD COLUMN IF NOT EXISTS {col} {decl}")
-    today = date.today().isoformat()
+    today = local_today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
         con.execute("INSERT OR IGNORE INTO invite(code,note,is_admin,created) VALUES(?,?,1,?)",
@@ -1285,20 +1300,24 @@ def cat_color(cat):
     return CAT_TINT.get(cat, "#4b6a5e")
 
 
-def greeting():
-    h = datetime.now().hour
-    return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
+def greeting(hour=None):
+    """Time of day in IST — the host's own clock is hours off and said
+    'Good morning' to users at 10pm. `hour` is for tests."""
+    h = local_now().hour if hour is None else hour
+    if h < 5 or h >= 17:        # small hours count as night, not morning
+        return "Good evening"
+    return "Good morning" if h < 12 else "Good afternoon"
 
 
 def _short_date(iso):
     """'2026-07-30' -> 'Today' / '30 Jul' / \"30 Jul '25\" — fits a narrow card."""
     if not iso:
         return "—"
-    if iso == date.today().isoformat():
+    if iso == local_today().isoformat():
         return "Today"
     try:
         y, m, d = (int(x) for x in iso.split("-"))
-        return (f"{d} {MON_ABBR[m]}" if y == date.today().year
+        return (f"{d} {MON_ABBR[m]}" if y == local_today().year
                 else f"{d} {MON_ABBR[m]} '{str(y)[2:]}")
     except (ValueError, IndexError):
         return E(iso)
@@ -2692,7 +2711,7 @@ def post_rate(con, body):
     rtype = (prof["company"] if prof and prof["company"] else "Ingrex user")[:120]
     con.execute("INSERT INTO rating (vendor_id,rater,rater_type,score,note,created)"
                 " VALUES (?,?,?,?,?,?)",
-                (vid, rater, rtype, score, note, date.today().isoformat()))
+                (vid, rater, rtype, score, note, local_today().isoformat()))
     con.commit()
     return vid, "Thanks — rating recorded."
 
@@ -2815,7 +2834,7 @@ def signup_account(con, name, email, company, verified=False):
         if live:
             return row["code"]
     code = secrets.token_urlsafe(9)
-    today = date.today().isoformat()
+    today = local_today().isoformat()
     con.execute("INSERT INTO invite(code,note,created) VALUES(?,?,?)", (code, name[:80], today))
     # completed=0 sends them through /welcome to finish business type, GST and city
     con.execute("INSERT INTO profile(code,name,company,role,gst,city,completed,created,email) "
@@ -2934,7 +2953,7 @@ def account_changed():
 
 def _days_since(iso):
     try:
-        return (date.today() - date.fromisoformat(iso)).days
+        return (local_today() - date.fromisoformat(iso)).days
     except (TypeError, ValueError):
         return 0
 
@@ -3389,7 +3408,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "completed,created,email) VALUES(?,?,?,?,?,?,1,?,?)",
                         (ident["code"], saved["name"], saved.get("company", ""),
                          saved.get("role", ""), saved.get("gst", ""), saved.get("city", ""),
-                         (old["created"] if old else None) or date.today().isoformat(),
+                         (old["created"] if old else None) or local_today().isoformat(),
                          old["email"] if old else None))
                     con.execute("UPDATE invite SET note=? WHERE code=?",
                                 (saved["name"], ident["code"]))
@@ -3500,7 +3519,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             "(code,name,company,role,gst,city,completed,created,email) "
                             "VALUES(?,?,?,?,?,?,1,?,?)",
                             (ident["code"], d["name"], d["company"], d["role"], d["gst"],
-                             d["city"], (old["created"] if old else None) or date.today().isoformat(),
+                             d["city"], (old["created"] if old else None) or local_today().isoformat(),
                              old["email"] if old else None))
                 con.execute("UPDATE invite SET note=? WHERE code=?", (d["name"], ident["code"]))
                 con.commit()
@@ -3516,7 +3535,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 con.execute("INSERT INTO request(code,requester,company,ingredient,details,"
                             "status,created,updated) VALUES(?,?,?,?,?,'Open',?,?)",
                             (code, name, company, ingredient, details,
-                             date.today().isoformat(), date.today().isoformat()))
+                             local_today().isoformat(), local_today().isoformat()))
                 con.commit()
                 return self._redirect(
                     "/requests?msg=" + urllib.parse.quote("Request submitted — the purchase team will update you here."))
@@ -3529,7 +3548,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "SELECT 1 FROM request WHERE id=?", (rid,)).fetchone():
                     con.execute("INSERT INTO req_note(request_id,author,company,note,created) "
                                 "VALUES(?,?,?,?,?)",
-                                (int(rid), name, company, note, date.today().isoformat()))
+                                (int(rid), name, company, note, local_today().isoformat()))
                     con.commit()
                 return self._redirect(f"/requests#r{rid}")
             if path == "/account":
@@ -3600,7 +3619,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if row and (row["code"] == code or row["requester"] == name
                             or is_admin() or not gated):
                     con.execute("UPDATE request SET status='Closed', updated=? WHERE id=?",
-                                (date.today().isoformat(), rid))
+                                (local_today().isoformat(), rid))
                     con.commit()
                 return self._redirect("/requests")
             admin = is_admin() or not gated
@@ -3611,7 +3630,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 reply = f.get("reply", [""])[0].strip()[:400]
                 if status in REQUEST_STATUS:
                     con.execute("UPDATE request SET status=?, reply=?, updated=? WHERE id=?",
-                                (status, reply, date.today().isoformat(), rid))
+                                (status, reply, local_today().isoformat(), rid))
                     con.commit()
                 return self._redirect("/admin")
             if path == "/rate":
@@ -3622,7 +3641,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f = urllib.parse.parse_qs(body)
                 note = f.get("note", [""])[0].strip()[:80] or "Invitee"
                 con.execute("INSERT INTO invite(code,note,created) VALUES(?,?,?)",
-                            (secrets.token_urlsafe(6), note, date.today().isoformat()))
+                            (secrets.token_urlsafe(6), note, local_today().isoformat()))
                 con.commit()
                 return self._redirect("/admin")
             if path == "/admin/revoke" and admin:
@@ -3685,7 +3704,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     lo, hi = price_band(rate)
                     con.execute("INSERT OR IGNORE INTO offer(ingredient_id,vendor_id,price_min,"
                                 "price_max,unit,updated) VALUES(?,?,?,?,?,?)",
-                                (iid, vid, lo, hi, "kg", date.today().isoformat()))
+                                (iid, vid, lo, hi, "kg", local_today().isoformat()))
                     con.commit()
                 return self._redirect(f"/vendor/{vid}" if vid else "/vendors")
             if path == "/admin/offer/del":
@@ -3710,7 +3729,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if v and not con.execute(
                         "SELECT 1 FROM invite WHERE vendor_id=? AND revoked=0", (vid,)).fetchone():
                     con.execute("INSERT INTO invite(code,note,vendor_id,created) VALUES(?,?,?,?)",
-                                (secrets.token_urlsafe(6), v["name"], vid, date.today().isoformat()))
+                                (secrets.token_urlsafe(6), v["name"], vid, local_today().isoformat()))
                     con.commit()
                 return self._redirect(f"/vendor/{vid}")
             if path == "/admin/kick" and admin:
@@ -3905,7 +3924,7 @@ def demo():
     con.execute("INSERT INTO invite(code,note,created) VALUES('BUY1','Riya','d')")
     con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,completed,created)"
                 " VALUES('BUY1','Riya','Acme','Brand / Client','G','Pune',1,?)",
-                (date.today().isoformat(),))
+                (local_today().isoformat(),))
     con.commit()
     CTX.acct = None
     CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUY1.{sign_code('BUY1')}"})
@@ -3913,7 +3932,7 @@ def demo():
     assert b"Free trial" in view_account(con), "account page shows trial status"
     assert b"day" in trial_strip(con).encode(), "trial banner counts days left"
     # an old join date exhausts the trial and flips the banner to the upgrade prompt
-    old = date.fromordinal(date.today().toordinal() - (TRIAL_DAYS + 5)).isoformat()
+    old = date.fromordinal(local_today().toordinal() - (TRIAL_DAYS + 5)).isoformat()
     con.execute("UPDATE profile SET created=? WHERE code='BUY1'", (old,))
     con.commit()
     account_changed()
@@ -3954,7 +3973,7 @@ def demo():
     con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,"
                 "completed,created,email) VALUES(?,?,?,?,?,?,1,?,?)",
                 (code2, "Dev", "Nutraform", "Trader", "G" * 15, "Pune",
-                 date.today().isoformat(),
+                 local_today().isoformat(),
                  con.execute("SELECT email FROM profile WHERE code=?", (code2,)).fetchone()["email"]))
     con.commit()
     assert con.execute("SELECT email FROM profile WHERE code=?",
@@ -4039,8 +4058,20 @@ def demo():
     assert not _pg_sql("INSERT OR IGNORE INTO price_point(a) VALUES(?)")[1], "no id needed"
     assert "SERIAL PRIMARY KEY" in tr("CREATE TABLE x (id INTEGER PRIMARY KEY)")
 
+    # clock: greetings and dates follow IST, not whatever the container is set to.
+    # A US-region host made 10pm in India read as 9:30am and say "Good morning".
+    assert local_now().utcoffset() == timedelta(hours=5, minutes=30), "IST, no DST"
+    assert local_today() == local_now().date(), "same clock for both helpers"
+    for hh, want in ((0, "Good evening"), (8, "Good morning"), (11, "Good morning"),
+                     (12, "Good afternoon"), (16, "Good afternoon"),
+                     (17, "Good evening"), (22, "Good evening")):
+        assert greeting(hh) == want, f"{hh}:00 IST should be {want}"
+    # the whole day is covered — no hour falls through to a default
+    assert {greeting(h) for h in range(24)} == {"Good morning", "Good afternoon",
+                                                "Good evening"}
+
     # card footer must stay on one line at ~178px: short dates, no wrapping
-    assert _short_date(date.today().isoformat()) == "Today"
+    assert _short_date(local_today().isoformat()) == "Today"
     assert _short_date("2026-07-30") == "30 Jul" and "'" in _short_date("2019-01-05")
     assert _short_date("") == "—" and _short_date("nonsense") == "nonsense"
     card = icard(search_ingredients(con)[0], moves={})
@@ -4107,7 +4138,7 @@ def demo():
     assert read_prof({"Cookie": "prof=tampered.0000"}) is None
 
     # reviews are buyer-only (sellers can't review) when the gate is active
-    con.execute("INSERT INTO invite(code,note,created) VALUES('BUY1','X',?)", (date.today().isoformat(),))
+    con.execute("INSERT INTO invite(code,note,created) VALUES('BUY1','X',?)", (local_today().isoformat(),))
     con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,completed,created)"
                 " VALUES('BUY1','X','Y','Trader','g','c',1,'d')")
     con.commit()
