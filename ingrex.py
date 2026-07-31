@@ -703,13 +703,15 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
 .icard .iprice .unit{font-size:12px;font-weight:500;color:var(--mut)}
 .icard .isup{color:var(--mut);font-size:11.5px;font-weight:600;margin-top:2px}
-.icard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;
+.icard .foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px;
   padding-top:10px;border-top:1px solid var(--line2)}
-.icard .ibadge{font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px}
+/* both sides stay on one line: the card is only ~178px wide */
+.icard .ibadge{font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;
+  white-space:nowrap;flex:none}
 .icard .ibadge.down{background:var(--acc-t);color:var(--acc-d)}
 .icard .ibadge.up{background:#fbe9df;color:var(--up)}
 .icard .ibadge.flat{background:var(--bg);color:var(--mut)}
-.icard .iupd{font-size:10px;color:var(--mut);font-weight:600}
+.icard .iupd{font-size:10px;color:var(--mut);font-weight:600;white-space:nowrap;\n  overflow:hidden;text-overflow:ellipsis}
 .xbtn{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;background:#fff;
   color:var(--up);border:1px solid #e6c3ad;cursor:pointer}
 .xbtn:hover{background:#fbe9df}
@@ -1275,14 +1277,27 @@ def greeting():
     return "Good morning" if h < 12 else "Good afternoon" if h < 17 else "Good evening"
 
 
+def _short_date(iso):
+    """'2026-07-30' -> 'Today' / '30 Jul' / \"30 Jul '25\" — fits a narrow card."""
+    if not iso:
+        return "—"
+    if iso == date.today().isoformat():
+        return "Today"
+    try:
+        y, m, d = (int(x) for x in iso.split("-"))
+        return (f"{d} {MON_ABBR[m]}" if y == date.today().year
+                else f"{d} {MON_ABBR[m]} '{str(y)[2:]}")
+    except (ValueError, IndexError):
+        return E(iso)
+
+
 def icard(r, wl=frozenset(), back="/", moves=None):
     price = (f"₹{r['lo']:,.0f}–{r['hi']:,.0f}<span class=unit> /{E(r['unit'])}</span>"
              if r["lo"] else "<span class=mut>No offers</span>")
     rating = (f"<span class=st>★</span> {r['rating']:.1f}" if r["rating"]
               else "<span class=new>New</span>")
-    today = date.today().isoformat()
-    updated = ("Updated today" if r["updated"] == today
-               else f"Updated {E(r['updated'])}" if r["updated"] else "—")
+    # "Updated 2026-07-30" is too wide for the card and wrapped onto two lines
+    updated = _short_date(r["updated"])
     pct = (moves or {}).get(r["id"])
     if pct is None:
         badge = "<span class='ibadge flat'>Compare</span>"
@@ -3959,6 +3974,30 @@ def demo():
     assert con.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?)",
                        ("community test EXTRACT",)).fetchone(), "dupe check is case-insensitive"
     assert infer_category("Ashwagandha Root Extract") == "Herbal Extract", "category auto-detect"
+
+    # Postgres shim: the SQL shapes the app actually issues must translate.
+    # Checked here because switching DATABASE_URL on is the durability fix, and a
+    # broken translation would only surface in production.
+    tr = lambda q: _pg_sql(q)[0]
+    assert "%s" in tr("SELECT 1 FROM t WHERE a=?") and "?" not in tr("SELECT ? ")
+    assert tr("INSERT OR IGNORE INTO offer(a) VALUES(?)").endswith("ON CONFLICT DO NOTHING")
+    assert "ON CONFLICT (code) DO UPDATE" in tr("INSERT OR REPLACE INTO profile(code) VALUES(?)")
+    assert "COALESCE(EXCLUDED.email" in tr("INSERT OR REPLACE INTO profile(code) VALUES(?)"), \
+        "onboarding must not blank a Google signup's email on Postgres"
+    # every table we read lastrowid from has to come back with RETURNING id
+    for t in ("vendor", "ingredient"):
+        sql, ret = _pg_sql(f"INSERT INTO {t}(name) VALUES(?)")
+        assert ret and sql.endswith("RETURNING id"), f"{t} needs its new id"
+    assert not _pg_sql("INSERT OR IGNORE INTO price_point(a) VALUES(?)")[1], "no id needed"
+    assert "SERIAL PRIMARY KEY" in tr("CREATE TABLE x (id INTEGER PRIMARY KEY)")
+
+    # card footer must stay on one line at ~178px: short dates, no wrapping
+    assert _short_date(date.today().isoformat()) == "Today"
+    assert _short_date("2026-07-30") == "30 Jul" and "'" in _short_date("2019-01-05")
+    assert _short_date("") == "—" and _short_date("nonsense") == "nonsense"
+    card = icard(search_ingredients(con)[0], moves={})
+    assert b"Updated 2" not in card.encode(), "long ISO date no longer printed on the card"
+    assert "white-space:nowrap" in CSS.split(".icard .ibadge")[1][:120], "badge cannot wrap"
     con.execute("DELETE FROM ingredient WHERE name='Community Test Extract'")
     con.commit()
 
@@ -4057,7 +4096,7 @@ def demo():
 
     # card: price band, colored accent, supplier count, updated — no image
     dash = view_dashboard(con)
-    assert b"priceband" in dash and b"Supplier" in dash and b"Updated" in dash
+    assert b"priceband" in dash and b"Supplier" in dash and b"iupd" in dash
     assert b"--cc:" in dash, "category-tinted accent"
     assert b"iimg" not in dash, "illustration removed"
     assert "rating" in search_ingredients(con)[0].keys()
