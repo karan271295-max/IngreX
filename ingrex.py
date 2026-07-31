@@ -683,6 +683,19 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .iwrap .star{top:9px;right:9px}
 .itable td{vertical-align:middle}.itable tbody tr:hover{background:var(--acc-t)}
 .itable .starcell{width:34px;text-align:center;padding-right:0}
+/* supplier hits above the ingredient table on /search */
+.vhits{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:10px;
+  margin-bottom:14px}
+.vhit{display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--card);
+  border:1px solid var(--line);border-radius:11px;color:inherit;box-shadow:var(--shadow);
+  transition:border-color .16s,box-shadow .16s}
+.vhit:hover{border-color:#cfe0d7;color:inherit;box-shadow:0 4px 14px -6px rgba(15,31,26,.2)}
+.vhit b{display:block;font-size:13.5px;color:var(--ink);line-height:1.25}
+.vhit .metaline{font-size:11.5px}
+.vhit .go{margin-left:auto;font-size:11.5px;font-weight:700;color:var(--acc-d);white-space:nowrap}
+.dym{margin-bottom:14px;padding:11px 14px;border-radius:11px;font-size:13px;font-weight:600;
+  background:var(--acc-t);border:1px solid #d7e8df;color:var(--acc-d)}
+.dym a{font-weight:800;text-decoration:underline}
 .itable tr.crow td.starcell{border-left:3px solid var(--cc,var(--line))}
 .itable tr.crow:hover{background:color-mix(in srgb,var(--cc) 7%,#fff)}
 .star2{font-size:16px;color:#c2ccc6;text-decoration:none}
@@ -1414,8 +1427,12 @@ def search_ingredients(con, q="", kind="", doc="", maxp=None):
     WHERE 1=1"""
     args = []
     if q:
-        sql += " AND (i.name LIKE ? OR i.category LIKE ? OR i.functions LIKE ? OR i.cas LIKE ?)"
-        args += [f"%{q}%"] * 4
+        # every word must appear somewhere, so word order and extra words still match;
+        # supplier name is searchable too — "see pold" should find what they sell
+        for tok in [t for t in q.split() if t]:
+            sql += (" AND (i.name LIKE ? OR i.category LIKE ? OR i.functions LIKE ?"
+                    " OR i.cas LIKE ? OR v.name LIKE ?)")
+            args += [f"%{tok}%"] * 5
     if kind:
         sql += " AND v.kind = ?"
         args.append(kind)
@@ -1430,21 +1447,53 @@ def search_ingredients(con, q="", kind="", doc="", maxp=None):
 
 
 def suggest(con, q):
-    """Top-bar autocomplete: ingredient + supplier near-matches."""
+    """Top-bar autocomplete over ingredients + suppliers.
+
+    Matches every word separately (so word order doesn't matter), then falls back
+    to fuzzy matching — real buyers type "Sea Pold" for "See Pold Chemicals" and
+    a plain LIKE returns nothing at all for that."""
     q = (q or "").strip()
     if not q:
         return []
-    like = f"%{q}%"
+    toks = q.split()
+    where = " AND ".join(["name LIKE ?"] * len(toks))
+    args = [f"%{t}%" for t in toks]
     out = []
-    for r in con.execute("SELECT id,name,category FROM ingredient WHERE name LIKE ? "
-                         "ORDER BY (name LIKE ?) DESC, name LIMIT 6", (like, f"{q}%")):
+    for r in con.execute(f"SELECT id,name,category FROM ingredient WHERE {where} "
+                         "ORDER BY (name LIKE ?) DESC, name LIMIT 6", args + [f"{q}%"]):
         out.append({"t": "Ingredient", "l": r["name"], "s": r["category"],
                     "h": f"/ingredient/{r['id']}"})
-    for r in con.execute("SELECT id,name,state FROM vendor WHERE name LIKE ? "
-                         "ORDER BY (name LIKE ?) DESC, name LIMIT 4", (like, f"{q}%")):
+    for r in con.execute(f"SELECT id,name,state FROM vendor WHERE {where} "
+                         "ORDER BY (name LIKE ?) DESC, name LIMIT 4", args + [f"{q}%"]):
         out.append({"t": "Supplier", "l": r["name"], "s": r["state"] or "",
                     "h": f"/vendor/{r['id']}"})
-    return out
+    if out or len(q) < 3:
+        return out
+    return _fuzzy_suggest(con, q)
+
+
+def _fuzzy_suggest(con, q):
+    """Nothing matched literally — find the nearest catalogue and supplier names."""
+    import difflib
+    rows = ([("Ingredient", r["id"], r["name"], r["category"], "/ingredient/")
+             for r in con.execute("SELECT id,name,category FROM ingredient")] +
+            [("Supplier", r["id"], r["name"], r["state"] or "", "/vendor/")
+             for r in con.execute("SELECT id,name,state FROM vendor")])
+    ql = q.lower()
+    scored = []
+    for kind, rid, name, sub, href in rows:
+        nl = name.lower()
+        # best of: whole-string similarity, or the closest single word in the name
+        score = difflib.SequenceMatcher(None, ql, nl).ratio()
+        for word in nl.split():
+            score = max(score, difflib.SequenceMatcher(None, ql, word).ratio())
+            for qt in ql.split():
+                score = max(score, difflib.SequenceMatcher(None, qt, word).ratio() * 0.9)
+        if score >= 0.62:
+            scored.append((score, kind, rid, name, sub, href))
+    scored.sort(reverse=True)
+    return [{"t": k, "l": n, "s": s, "h": f"{h}{i}"}
+            for _, k, i, n, s, h in scored[:6]]
 
 
 def vendor_rating(con, vendor_id):
@@ -1598,6 +1647,27 @@ def view_search(con, params, wl=frozenset()):
     qs = urllib.parse.urlencode({k: v for k, v in
                                  [("q", q), ("kind", kind), ("doc", doc), ("maxp", raw)] if v})
     back = "/search" + (f"?{qs}" if qs else "")
+    # suppliers whose name matches — a query like "see pold" is looking for the
+    # company, not an ingredient, so link straight to them
+    vmatch = []
+    if q:
+        vwhere = " AND ".join(["name LIKE ?"] * len(q.split()))
+        vmatch = con.execute(
+            f"SELECT id,name,kind,state FROM vendor WHERE {vwhere} "
+            "AND COALESCE(blacklisted,0)=0 ORDER BY name LIMIT 4",
+            [f"%{t}%" for t in q.split()]).fetchall()
+    vstrip = ("<div class=vhits>" + "".join(
+        f"<a class=vhit href='/vendor/{v['id']}'><span class=av>{E(initials(v['name']))}</span>"
+        f"<span><b>{E(v['name'])}</b><span class=metaline>{E(v['kind'])}"
+        f"{' · ' + E(v['state']) if v['state'] else ''}</span></span>"
+        f"<span class=go>View →</span></a>" for v in vmatch) + "</div>") if vmatch else ""
+    # nothing matched literally: offer the nearest real names instead of a dead end
+    didyoumean = ""
+    if q and not rows and not vmatch:
+        near = _fuzzy_suggest(con, q)[:4]
+        if near:
+            didyoumean = ("<div class=dym>Did you mean " + " · ".join(
+                f"<a href='{n['h']}'>{E(n['l'])}</a>" for n in near) + "?</div>")
     export_link = (f"<a href='/export.csv{'?' + qs if qs else ''}' "
                    f"style='margin-left:auto;font-weight:700;font-size:12.5px' "
                    f"title='Download these results as a spreadsheet'>↓ Export CSV</a>"
@@ -1622,6 +1692,7 @@ def view_search(con, params, wl=frozenset()):
         <h2 style='margin-bottom:0'>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
         {export_link}
       </div>
+      {vstrip}{didyoumean}
       {(f'''<div class=tablewrap><table class=itable>
         <thead><tr><th></th><th>Ingredient</th><th>Price range</th><th>Suppliers</th>
           <th>12-mo</th><th>Updated</th></tr></thead>
@@ -2746,42 +2817,30 @@ LOGIN_CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,
-  Helvetica,Arial,sans-serif;color:#0f1f1a;background:#eef2f0;
+  Helvetica,Arial,sans-serif;color:#0f1f1a;background:#04140f;
   letter-spacing:-.006em;-webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;font-variant-numeric:tabular-nums}
 a{color:#0d7a56;text-decoration:none}a:hover{text-decoration:underline}
-/* two rounded panels floating on a soft page */
-.split{display:grid;grid-template-columns:1.04fr 1fr;gap:14px;
-  min-height:100vh;padding:14px}
-.pane{border-radius:22px;overflow:hidden;position:relative}
-.pane-l{background:#04140f;
-  box-shadow:0 30px 80px -40px rgba(4,20,15,.75),0 2px 8px -2px rgba(4,20,15,.25)}
-/* the shader paints here; this gradient is what shows if WebGL is unavailable */
-.gradcanvas{position:absolute;inset:0;width:100%;height:100%;display:block;
-  background:radial-gradient(120% 100% at 25% 20%,#12b884 0%,#0a5d41 38%,#04140f 78%)}
-.grain{position:absolute;inset:0;pointer-events:none;opacity:.16;mix-blend-mode:overlay;
+/* full-bleed moving mesh; the CSS gradient is the no-WebGL fallback */
+.gradcanvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0;
+  background:radial-gradient(90% 80% at 22% 18%,#2ce39f 0%,#0d7a56 34%,#052b1f 68%,#04140f 100%)}
+.grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.14;mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
-.pitch{position:absolute;inset:auto 0 0 0;padding:46px 46px 44px;color:#f2fbf7;
-  background:linear-gradient(180deg,rgba(4,20,15,0),rgba(4,20,15,.55) 45%,rgba(3,14,10,.8))}
-.pitch .brand{font-size:31px;font-weight:800;letter-spacing:-.038em;color:#fff}
-.pitch .brand span{color:#5fe6ad}
-.pitch h2{margin:16px 0 11px;font-size:27px;line-height:1.22;font-weight:700;
-  letter-spacing:-.028em;max-width:15ch;color:#fff}
-.pitch p{font-size:13.5px;line-height:1.62;color:rgba(255,255,255,.72);max-width:40ch}
-.pitch ul{list-style:none;display:flex;gap:9px;flex-wrap:wrap;margin-top:24px}
-.pitch li{font-size:11.5px;font-weight:650;color:rgba(255,255,255,.9);
-  padding:6px 12px;border-radius:20px;backdrop-filter:blur(10px);
-  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16)}
-/* right panel */
-.pane-r{background:#fff;display:grid;place-items:center;padding:40px 30px;
-  border:1px solid #e2e8e4;
-  box-shadow:0 30px 80px -50px rgba(15,31,26,.3),0 1px 3px -1px rgba(15,31,26,.06)}
-.card{width:100%;max-width:376px}
-.card .mob{display:none;font-size:27px;font-weight:800;letter-spacing:-.038em;
-  color:#0f1f1a;margin-bottom:20px}
-.card .mob span{color:#0d7a56}
-.card h1{font-size:25px;letter-spacing:-.028em;margin-bottom:6px;font-weight:700}
-.card .lead{font-size:13.5px;line-height:1.6;color:#6b7d75;margin-bottom:26px}
+/* one card, centred on the mesh */
+.stage{position:relative;z-index:2;min-height:100vh;min-height:100dvh;
+  display:grid;place-items:center;padding:32px 20px}
+.card{width:100%;max-width:412px;background:#fff;border-radius:22px;padding:38px 38px 32px;
+  border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 40px 90px -30px rgba(2,12,8,.55),0 12px 30px -14px rgba(2,12,8,.35),
+    0 1px 0 rgba(255,255,255,.7) inset}
+.card .mark{display:flex;align-items:center;gap:9px;margin-bottom:22px}
+.card .mark .mk{width:29px;height:29px;border-radius:8px;flex:none;display:grid;
+  place-items:center;font-weight:800;font-size:14px;color:#fff;
+  background:linear-gradient(140deg,#12b884,#0a5d41)}
+.card .mark .wm{font-size:19px;font-weight:800;letter-spacing:-.035em;color:#0f1f1a}
+.card .mark .wm span{color:#0d7a56}
+.card h1{font-size:23px;letter-spacing:-.028em;margin-bottom:6px;font-weight:700}
+.card .lead{font-size:13.5px;line-height:1.6;color:#6b7d75;margin-bottom:24px}
 .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
   padding:12px;font-size:14px;font-weight:600;color:#1f2b26;background:#fff;
   border:1px solid #dfe7e2;border-radius:11px;cursor:pointer;text-decoration:none;
@@ -2802,24 +2861,25 @@ button.go{padding:13px;font-size:14.5px;font-weight:700;color:#fff;cursor:pointe
   border-radius:11px;background:linear-gradient(180deg,#0f8a61,#0a5d41);
   box-shadow:0 8px 20px -10px rgba(13,122,86,.8),0 1px 0 rgba(255,255,255,.14) inset;
   transition:filter .16s,transform .08s,box-shadow .16s}
-button.go:hover{filter:brightness(1.06);box-shadow:0 12px 26px -10px rgba(13,122,86,.9),
-  0 1px 0 rgba(255,255,255,.14) inset}
+button.go:hover{filter:brightness(1.06)}
 button.go:active{transform:translateY(1px)}
 .err{margin-bottom:16px;padding:11px 13px;font-size:13px;font-weight:650;color:#b4541c;
   background:#fbe9df;border:1px solid #e6c3ad;border-radius:11px}
 .note{margin-top:20px;font-size:12.5px;color:#6b7d75;text-align:center}
-.fine{margin-top:28px;font-size:11.5px;line-height:1.6;color:#a3b0a9;text-align:center}
-.trialpin{display:inline-flex;align-items:center;gap:7px;margin-bottom:18px;padding:6px 12px;
+.fine{margin-top:22px;font-size:11.5px;line-height:1.55;color:#a3b0a9;text-align:center}
+.trialpin{display:inline-flex;align-items:center;gap:7px;margin-bottom:16px;padding:6px 12px;
   font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;
   color:#0a5d41;background:#eaf3ee;border:1px solid #d7e8df;border-radius:20px}
+/* trust line sits on the mesh, under the card */
+.below{margin-top:20px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.below span{font-size:11.5px;font-weight:600;color:rgba(255,255,255,.82);
+  padding:5px 11px;border-radius:20px;backdrop-filter:blur(10px);
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18)}
 :focus-visible{outline:2px solid #0d7a56;outline-offset:2px}
-@media(max-width:880px){
-  .split{grid-template-columns:1fr;padding:0;gap:0;min-height:100dvh}
-  .pane-l{display:none}
-  .pane-r{border-radius:0;border:0;box-shadow:none;align-items:start;padding-top:54px}
-  .card .mob{display:block}
+@media(max-width:520px){
+  .card{padding:30px 24px 26px;border-radius:18px}
+  .below{display:none}
 }
-@media(prefers-reduced-motion:reduce){.grain{display:none}}
 """
 
 
@@ -2855,17 +2915,20 @@ var FS=[
 ' vec3 pine=vec3(0.031,0.286,0.204);',
 ' vec3 emer=vec3(0.055,0.502,0.353);',
 ' vec3 mint=vec3(0.376,0.937,0.718);',
-' vec2 c1=vec2(0.30*ar+0.16*ar*sin(t*0.70),0.74+0.10*cos(t*0.53));',
-' vec2 c2=vec2(0.78*ar+0.13*ar*cos(t*0.44),0.28+0.13*sin(t*0.61));',
-' vec2 c3=vec2(0.55*ar+0.18*ar*sin(t*0.35+2.1),0.55+0.15*cos(t*0.40+1.2));',
-' vec2 c4=vec2(0.16*ar+0.10*ar*cos(t*0.58+0.7),0.20+0.09*sin(t*0.47+2.6));',
-' float w1=well(p,c1,0.34),w2=well(p,c2,0.40);',
-' float w3=well(p,c3,0.30),w4=well(p,c4,0.33);',
-' float s=w1+w2+w3+w4+0.16;',
-' vec3 col=(mint*w1+pine*w2+emer*w3+mint*0.45*w4+deep*0.16)/s;',
-// lift the brightest well further so the panel has a light source, not flat wash
-' col+=mint*smoothstep(0.45,1.0,w1/(s*0.7))*0.30;',
-' col=mix(col,deep,smoothstep(0.30,1.05,length((uv-vec2(0.32,0.72))*vec2(1.0,0.80))));',
+// spread across the full viewport width, so a wide screen isn't one flat corner
+' vec2 c1=vec2(0.22*ar+0.18*ar*sin(t*0.70),0.78+0.12*cos(t*0.53));',
+' vec2 c2=vec2(0.84*ar+0.16*ar*cos(t*0.44),0.24+0.15*sin(t*0.61));',
+' vec2 c3=vec2(0.55*ar+0.22*ar*sin(t*0.35+2.1),0.58+0.18*cos(t*0.40+1.2));',
+' vec2 c4=vec2(0.12*ar+0.14*ar*cos(t*0.58+0.7),0.18+0.11*sin(t*0.47+2.6));',
+' vec2 c5=vec2(0.95*ar+0.15*ar*sin(t*0.39+4.0),0.86+0.10*cos(t*0.50+0.4));',
+' float rr=0.34+0.16*clamp(ar-1.0,0.0,1.6);',
+' float w1=well(p,c1,rr),w2=well(p,c2,rr*1.18);',
+' float w3=well(p,c3,rr*0.92),w4=well(p,c4,rr),w5=well(p,c5,rr*0.86);',
+' float s=w1+w2+w3+w4+w5+0.16;',
+' vec3 col=(mint*w1+pine*w2+emer*w3+mint*0.45*w4+emer*0.8*w5+deep*0.16)/s;',
+// lift the brightest well so there is a light source, not a flat wash
+' col+=mint*smoothstep(0.45,1.0,w1/(s*0.7))*0.28;',
+' col=mix(col,deep,smoothstep(0.42,1.30,length((uv-vec2(0.34,0.70))*vec2(0.9,0.85))));',
 ' col+=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-0.5)*0.014;',
 ' gl_FragColor=vec4(col,1.0);}'
 ].join('\\n');
@@ -2947,24 +3010,21 @@ def login_page(err="", prefill="", mode="signin", d=None):
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{'Create account' if mode == 'signup' else 'Sign in'} · Ingrex</title>"
             f"<style>{LOGIN_CSS}</style>"
-            f"<div class=split>"
-            f"<div class='pane pane-l'>"
             f"<canvas id=grad class=gradcanvas aria-hidden=true></canvas>"
             f"<div class=grain aria-hidden=true></div>"
-            f"<div class=pitch><div class=brand>ingre<span>x</span></div>"
-            f"<h2>Source ingredients on real market prices.</h2>"
-            f"<p>Compare vendor price bands, 12-month trends and verified supplier "
-            f"documents across the nutraceutical catalogue.</p>"
-            f"<ul><li>67 ingredients</li><li>48 verified suppliers</li>"
-            f"<li>12-month price history</li></ul></div></div>"
-            f"<div class='pane pane-r'><div class=card>"
-            f"<div class=mob>ingre<span>x</span></div>"
+            f"<div class=stage><div>"
+            f"<div class=card>"
+            f"<div class=mark><span class=mk>i</span>"
+            f"<span class=wm>ingre<span>x</span></span></div>"
             f"{head}"
             f"{f'<div class=err>{E(err)}</div>' if err else ''}"
             f"{google}{form}"
             f"<div class=fine>By continuing you agree to Ingrex's terms and privacy policy. "
             f"Prices shown are indicative market bands, not live quotes.</div>"
-            f"</div></div></div>{SHADER_JS}</html>").encode()
+            f"</div>"
+            f"<div class=below><span>67 ingredients</span>"
+            f"<span>48 verified suppliers</span><span>12-month price history</span></div>"
+            f"</div></div>{SHADER_JS}</html>").encode()
 
 
 WELCOME_CSS = """
@@ -3506,6 +3566,24 @@ def demo():
     assert len(search_ingredients(con)) == n_ing
     assert len(search_ingredients(con, "whey")) >= 1
     assert search_ingredients(con, "zzzznotreal") == []
+    # searching a supplier finds what they sell — this returned nothing before
+    vend = con.execute("SELECT name FROM vendor ORDER BY "
+                       "(SELECT COUNT(*) FROM offer WHERE vendor_id=vendor.id) DESC "
+                       "LIMIT 1").fetchone()["name"]
+    assert search_ingredients(con, vend), "supplier name matches their ingredients"
+    assert search_ingredients(con, vend.split()[0]), "partial supplier name works too"
+    # word order must not matter
+    two = [v["name"] for v in con.execute("SELECT name FROM vendor")
+           if len(v["name"].split()) > 1][0].split()
+    assert search_ingredients(con, f"{two[1]} {two[0]}") == search_ingredients(
+        con, f"{two[0]} {two[1]}"), "token search is order-independent"
+    # a near-miss on a real supplier still finds it ("Sea Pold" -> "See Pold Chemicals")
+    real = con.execute("SELECT name FROM vendor WHERE name LIKE '%Pold%'").fetchone()
+    if real:
+        hits = suggest(con, "Sea Pold")
+        assert any(h["l"] == real["name"] for h in hits), "fuzzy rescues the typo"
+        assert b"Did you mean" in view_search(con, {"q": ["Sea Pold"]}), "search page suggests it"
+    assert suggest(con, "zzzznotreal") == [], "fuzzy does not invent matches"
     # autocomplete: near-matches across ingredients + suppliers, typed prefix ranked first
     sg = suggest(con, "prot")
     assert sg and all({"t", "l", "h"} <= set(s) for s in sg)
