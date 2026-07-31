@@ -867,14 +867,10 @@ def sidebar(active):
             f"</a></div></aside>")
 
 
-def topbar(q=""):
-    con = connect()
-    try:
-        items = notifications(con)
-        s = con.execute("SELECT (SELECT COALESCE(MAX(id),0) FROM rating) r,"
-                        " (SELECT COALESCE(MAX(month),'') FROM price_point) m").fetchone()
-    finally:
-        con.close()
+def topbar(con, q=""):
+    items = notifications(con)
+    s = con.execute("SELECT (SELECT COALESCE(MAX(id),0) FROM rating) r,"
+                    " (SELECT COALESCE(MAX(month),'') FROM price_point) m").fetchone()
     sig = f"{s['r']}-{s['m']}"   # changes when a new review or price month lands
     feed = "".join(
         f"<a class=nitem href='{it['href']}'>"
@@ -954,12 +950,12 @@ else if(e.key==='Escape'){hide();}});
 document.addEventListener('click',function(e){if(!inp.parentNode.contains(e.target))hide();});})();
 </script>"""
 
-def page(title, body, active="dashboard", q=""):
+def page(con, title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{E(title)} · Ingrex</title><style>{CSS}</style>"
             f"<div class=shell>{sidebar(active)}"
-            f"<div class=content>{topbar(q)}<main class=wrap>{body}</main>"
+            f"<div class=content>{topbar(con, q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
             f"</div></div>{NOTIF_JS}{TREND_JS}{SEARCH_JS}</html>").encode()
@@ -1320,7 +1316,7 @@ def view_dashboard(con, wl=frozenset(), trend_sel=""):
         <div class=ph><h3>Top rated suppliers</h3><a href='/vendors'>View all →</a></div>
         {top_suppliers(con, 5)}
       </div>"""
-    return page("Dashboard", body, active="dashboard")
+    return page(con, "Dashboard", body, active="dashboard")
 
 
 def view_search(con, params, wl=frozenset()):
@@ -1365,7 +1361,7 @@ def view_search(con, params, wl=frozenset()):
         f"<p class=metaline style='margin:0 0 14px'>Looking for an ingredient not on Ingrex? "
         f"Raise a sourcing request and our purchase team will find a supplier for you.</p>"
         f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>"}"""
-    return page("Search", body, active="search", q=q)
+    return page(con, "Search", body, active="search", q=q)
 
 
 def irow(r, wl=frozenset(), back="/search", mv=None):
@@ -1401,7 +1397,7 @@ def view_watchlist(con, wl=frozenset()):
       <div class=hi><h1>Watchlist</h1>
         <div class=sub>Ingredients you're tracking on this device.</div></div>
       {inner}"""
-    return page("Watchlist", body, active="watch")
+    return page(con, "Watchlist", body, active="watch")
 
 
 def _ago(s):
@@ -1501,7 +1497,7 @@ def view_admin(con):
         <div class=metaline style='margin-top:8px'>Also set <code class=inv>INGREX_SECRET</code>
           to any long random string so logins survive restarts.</div>
       </div>"""
-    return page("Admin", body, active="admin")
+    return page(con, "Admin", body, active="admin")
 
 
 def view_myreviews(con):
@@ -1523,7 +1519,7 @@ def view_myreviews(con):
     body = f"""
       <div class=hi><h1>My reviews</h1>
         <div class=sub>Ratings you've posted, as {E(name)}.</div></div>{inner}"""
-    return page("My reviews", body, active="reviews")
+    return page(con, "My reviews", body, active="reviews")
 
 
 def status_badge(s):
@@ -1563,11 +1559,16 @@ def req_card(con, r, code, name):
         return (f"<div class=lead><b>{E(l['author'])}</b>{co}: {E(l['note'])}"
                 f"<span class=count> · {E(l['created'] or '')}</span></div>")
     lead_html = "".join(lead_line(l) for l in leads)
-    mine = " <span class='tag func'>your request</span>" if (r["code"] == code or r["requester"] == name) else ""
+    owned = r["code"] == code or r["requester"] == name
+    mine = " <span class='tag func'>your request</span>" if owned else ""
     reply = f"<div class=rreply><b>Purchase team:</b> {E(r['reply'])}</div>" if r["reply"] else ""
+    remove = (f"<form method=post action='/request_close' style='margin-left:auto'>"
+              f"<input type=hidden name=id value='{r['id']}'>"
+              f"<button class=xbtn title='Remove from board'>Remove</button></form>"
+              if owned or is_admin() or not gate_active(con) else "")
     return f"""<div class=review id=r{r['id']}>
       <div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap'>
-        <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}{mine}</div>
+        <b>{E(r['ingredient'])}</b>{status_badge(r['status'])}{mine}{remove}</div>
       <div class=metaline style='margin-top:4px'>{E(r['requester'] or 'A buyer')}
         {f"· {E(r['company'])}" if r['company'] else ''} · raised {E(r['created'] or '')}</div>
       {f"<div class=metaline style='margin-top:6px;color:var(--ink)'>{E(r['details'])}</div>" if r['details'] else ""}
@@ -1607,7 +1608,7 @@ def view_requests(con, prefill="", msg=""):
       </div>
       <h2>Community board ({len(active)} open)</h2>
       {board or "<div class='panel pad'><p class=empty>No open requests. Raise one above.</p></div>"}"""
-    return page("Sourcing requests", body, active="requests")
+    return page(con, "Sourcing requests", body, active="requests")
 
 
 def view_insights(con):
@@ -1676,7 +1677,7 @@ def view_insights(con):
           <thead><tr><th>Category</th><th>Ingredients</th><th>12-mo change</th></tr></thead>
           <tbody>{cat_rows}</tbody></table></div>
       </div>"""
-    return page("Market insights", body, active="insights")
+    return page(con, "Market insights", body, active="insights")
 
 
 def view_ingredient(con, ing_id, wl=frozenset()):
@@ -1713,7 +1714,7 @@ def view_ingredient(con, ing_id, wl=frozenset()):
       <div class=fact><span class=fl>Updated</span><span class=fv>{E(last_upd or '—')}</span></div>
     </div>"""
 
-    return page(ing["name"], f"""
+    return page(con, ing["name"], f"""
       <a class=back href='/'>← Ingredients</a>
       <div class=titlerow><h1>{E(ing['name'])}</h1>{wbtn}</div>
       <p class=metaline>{E(ing['category'])} · CAS {E(ing['cas'])}</p>
@@ -1810,7 +1811,7 @@ def view_vendors(con, q="", bl=False):
           </div>
           <button style='margin-top:14px'>Add supplier</button></form>
       </details>""" if (is_admin() or not gate_active(con)) else "")
-    return page("Vendors", f"""
+    return page(con, "Vendors", f"""
       <div class=hi><h1>Suppliers</h1>
         <div class=sub>Manufacturers, traders and importers on the platform.</div></div>
       {add_form}
@@ -1951,7 +1952,7 @@ def view_vendor(con, vid, msg=""):
               f"{'Remove from blacklist' if bl else '⛔ Blacklist this supplier'}</button></form>"
               if admin_only else "")
 
-    return page(v["name"], f"""
+    return page(con, v["name"], f"""
       {"" if own_supplier else "<a class=back href='/vendors'>← Suppliers</a>"}
       <div class=hi><h1>{hdr}</h1>{sub}</div>
       {bl_banner}
@@ -2482,7 +2483,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out = view_vendor(con, int(m[1]), params.get("msg", [""])[0][:80])
             else:
                 out = None
-            self._send(out or page("Not found", "<h1>404</h1><p><a href='/'>Home</a></p>"),
+            self._send(out or page(con, "Not found", "<h1>404</h1><p><a href='/'>Home</a></p>"),
                        200 if out else 404)
         finally:
             con.close()
@@ -2555,6 +2556,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (int(rid), name, company, note, date.today().isoformat()))
                     con.commit()
                 return self._redirect(f"/requests#r{rid}")
+            if path == "/request_close":
+                f = urllib.parse.parse_qs(body)
+                rid = f.get("id", ["0"])[0]
+                code, name, _ = requester_identity(con)
+                row = con.execute("SELECT code,requester FROM request WHERE id=?", (rid,)).fetchone() \
+                    if rid.isdigit() else None
+                if row and (row["code"] == code or row["requester"] == name
+                            or is_admin() or not gated):
+                    con.execute("UPDATE request SET status='Closed', updated=? WHERE id=?",
+                                (date.today().isoformat(), rid))
+                    con.commit()
+                return self._redirect("/requests")
             admin = is_admin() or not gated
             if path == "/admin/request" and admin:
                 f = urllib.parse.parse_qs(body)
@@ -2675,7 +2688,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         for k in [k for k, v in ONLINE.items() if v["code"] == code]:
                             del ONLINE[k]
                 return self._redirect("/admin")
-            self._send(page("Not found", "<h1>404</h1>"), 404)
+            self._send(page(con, "Not found", "<h1>404</h1>"), 404)
         finally:
             con.close()
             CTX.ident = None
