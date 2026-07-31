@@ -4,3 +4,8 @@ ingrex.db-shm
 ingrex-*.db
 __pycache__/
 *.pyc
+
+# Installed agent skills: 3.8MB of third-party code, restorable from
+# skills-lock.json (which IS tracked) via `npx skills install`.
+.agents/
+.claude/skills/
