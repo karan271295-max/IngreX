@@ -793,6 +793,8 @@ footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid va
   .stats{grid-template-columns:1fr 1fr}.hi h1{font-size:22px}
 }"""
 
+CSS_HASH = hashlib.md5(CSS.encode()).hexdigest()[:8]  # cache-bust /app.css on edit
+
 E = html.escape
 
 
@@ -953,7 +955,8 @@ document.addEventListener('click',function(e){if(!inp.parentNode.contains(e.targ
 def page(con, title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
-            f"<title>{E(title)} · Ingrex</title><style>{CSS}</style>"
+            f"<title>{E(title)} · Ingrex</title>"
+            f"<link rel=stylesheet href='/app.css?v={CSS_HASH}'>"
             f"<div class=shell>{sidebar(active)}"
             f"<div class=content>{topbar(con, q)}<main class=wrap>{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
@@ -1623,12 +1626,13 @@ def view_insights(con):
     avg_mv = sum(m["pct"] for m in movers) / len(movers) if movers else 0
     # per-category average % movement (no exact prices shown anywhere on insights)
     mv = moves_map(con)
-    cat_pct = {}
-    for c in cats:
-        ids = [r["id"] for r in con.execute(
-            "SELECT id FROM ingredient WHERE category=?", (c["category"],))]
-        ps = [mv[i] for i in ids if i in mv]
-        cat_pct[c["category"]] = (sum(ps) / len(ps)) if ps else None
+    cat_of = {r["id"]: r["category"] for r in
+              con.execute("SELECT id, category FROM ingredient")}
+    by_cat = {}
+    for i, pct in mv.items():
+        by_cat.setdefault(cat_of.get(i), []).append(pct)
+    cat_pct = {c["category"]: (sum(ps) / len(ps) if (ps := by_cat.get(c["category"])) else None)
+               for c in cats}
 
     def mlist(items, up):
         if not items:
@@ -2363,6 +2367,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
 
+    def _send_css(self):
+        body = CSS.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/css; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _serve_video(self):
         try:
             size = os.path.getsize(LOGIN_VIDEO)
@@ -2383,6 +2396,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.send_header("Content-Type", "video/mp4")
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "public, max-age=604800")
         self.send_header("Content-Length", str(length))
         self.end_headers()
         f.seek(start)
@@ -2407,6 +2421,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         params = urllib.parse.parse_qs(url.query)
         if url.path == "/bg.mp4":
             return self._serve_video()
+        if url.path == "/app.css":
+            return self._send_css()
         con = connect()
         try:
             gated = gate_active(con)
