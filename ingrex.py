@@ -36,6 +36,16 @@ COOKIE_MAXAGE = 60 * 60 * 24 * 30  # 30 days
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
 GOOGLE_ON = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+# Google matches the redirect_uri byte-for-byte. Derived from the request Host by
+# default, which breaks the moment a user arrives on a different hostname than the
+# one registered (www vs apex, or the onrender.com URL vs the custom domain).
+# Set INGREX_BASE_URL (e.g. https://ingrex.co.in) to pin one canonical callback.
+PUBLIC_BASE_URL = os.environ.get("INGREX_BASE_URL", "").strip().rstrip("/")
+
+
+def oauth_redirect_uri(proto="https", host=""):
+    base = PUBLIC_BASE_URL or f"{proto}://{host}"
+    return f"{base}/auth/google/callback"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "ingrex.db")
@@ -1933,10 +1943,26 @@ def view_admin(con):
                "every supplier edit, review and request is wiped on the next deploy and the "
                "catalogue reloads from suppliers.csv. Set DATABASE_URL to a Postgres "
                "connection string to keep changes.</span></div>")
+    # Google rejects the sign-in unless this string is registered verbatim, so
+    # show the exact one this deployment sends rather than making someone guess.
+    proto, host = getattr(CTX, "origin", ("https", ""))
+    live_uri = oauth_redirect_uri(proto, host)
+    if not GOOGLE_ON:
+        gstate = ("<div class='trial'><i class=bar></i><span class=pin>Google</span>"
+                  "<span>Sign-in is off — GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET "
+                  "are not set, so the button is hidden.</span></div>")
+    else:
+        pinned = ("pinned by INGREX_BASE_URL" if PUBLIC_BASE_URL
+                  else "follows the address each visitor uses — set INGREX_BASE_URL "
+                       "to pin one")
+        gstate = (f"<div class='trial'><i class=bar></i><span class=pin>Google</span>"
+                  f"<span>Sign-in is on. Authorised redirect URI must be registered "
+                  f"in Google Cloud Console exactly as: "
+                  f"<code class=inv>{E(live_uri)}</code> — {pinned}.</span></div>")
     body = f"""
       <div class=hi><h1>Admin</h1>
         <div class=sub>Manage sourcing requests, invites and see who's using the pilot right now.</div></div>
-      {storage}
+      {storage}{gstate}
       <div class='panel pad'>
         <div class=ph><h3>Sourcing requests</h3>
           <span class=count>{open_reqs} open · {len(reqs)} total</span></div>
@@ -3285,10 +3311,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def _oauth_redirect(self):
-        """Callback URL for this deployment — must match what's registered with Google."""
+        """Callback URL for this deployment — must match what's registered with Google
+        exactly. INGREX_BASE_URL pins it; otherwise it follows the request host."""
         proto = self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() or "http"
-        host = self.headers.get("Host", "localhost")
-        return f"{proto}://{host}/auth/google/callback"
+        return oauth_redirect_uri(proto, self.headers.get("Host", "localhost"))
 
     def _client_ip(self):
         return (self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
@@ -3306,6 +3332,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ident = identity(con, self.headers) if gated else None
             CTX.ident = ident
             CTX.acct = None
+            CTX.origin = (self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip()
+                          or "http", self.headers.get("Host", ""))
             if url.path == "/login":
                 return self._send(login_page(prefill=params.get("code", [""])[0][:64]))
             if url.path == "/signup":
@@ -3319,6 +3347,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "state": oauth_state(), "prompt": "select_account"})
                 return self._redirect("https://accounts.google.com/o/oauth2/v2/auth?" + q)
             if url.path == "/auth/google/callback":
+                if params.get("error"):        # Google refused before we saw a code
+                    return self._send(login_page(
+                        "Google declined the sign-in: "
+                        f"{params['error'][0][:80]}. Try the invite code instead."), 400)
                 if not (GOOGLE_ON and oauth_state_ok(params.get("state", [""])[0])):
                     return self._send(login_page("Sign-in link expired — try again."), 400)
                 got = google_identity(params.get("code", [""])[0], self._oauth_redirect())
@@ -3423,6 +3455,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ident = identity(con, self.headers) if gated else None
             CTX.ident = ident
             CTX.acct = None
+            CTX.origin = (self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip()
+                          or "http", self.headers.get("Host", ""))
             if path == "/login":
                 code = urllib.parse.parse_qs(body).get("code", [""])[0].strip()[:64]
                 row = con.execute("SELECT * FROM invite WHERE code=? AND revoked=0",
@@ -3937,6 +3971,17 @@ def demo():
     st = oauth_state()
     assert oauth_state_ok(st) and not oauth_state_ok(st.replace(".", "x.", 1))
     assert not oauth_state_ok("9999999999.deadbeef") and not oauth_state_ok("")
+    # redirect_uri must be byte-identical to what's registered with Google
+    assert oauth_redirect_uri("https", "ingrex.co.in") == \
+        "https://ingrex.co.in/auth/google/callback"
+    assert oauth_redirect_uri("http", "localhost:8000") == \
+        "http://localhost:8000/auth/google/callback"
+    # a pinned base wins over whichever host the visitor arrived on (www vs apex)
+    global PUBLIC_BASE_URL
+    PUBLIC_BASE_URL = "https://ingrex.co.in"
+    assert oauth_redirect_uri("https", "www.ingrex.co.in") == \
+        "https://ingrex.co.in/auth/google/callback", "pinned base overrides the host"
+    PUBLIC_BASE_URL = ""
     # login screen offers signup, and Google only when credentials are configured
     assert b"/signup" in login_page() and b"Start free month" in login_page(mode="signup")
     assert (b"auth/google" in login_page()) == GOOGLE_ON
