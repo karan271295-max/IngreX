@@ -1006,7 +1006,7 @@ def icon(path):
             f"<path d='{path}'/></svg>")
 
 
-def sidebar(active):
+def sidebar(con, active):
     if is_supplier():
         # suppliers get a focused nav: manage their own listing + market view
         nav_items = [
@@ -1035,10 +1035,11 @@ def sidebar(active):
                     f"{icon(path)}{label}<span class='nav-badge soon'>SOON</span></a></li>")
     # was a second link to the dashboard; downloading the catalogue is what the
     # icon already promised, and it's the thing buyers actually ask for
-    lis += ("<li class='nav-item mt-auto'><a class=nav-link href='/export.csv' "
-            "title='Download the full catalogue as a spreadsheet'>"
-            "<svg class=nav-icon viewBox='0 0 24 24' aria-hidden=true>"
-            "<path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>Export catalogue</a></li>")
+    if is_master(con):        # catalogue export is admin-only for now
+        lis += ("<li class='nav-item mt-auto'><a class=nav-link href='/export.csv' "
+                "title='Download the full catalogue as a spreadsheet'>"
+                "<svg class=nav-icon viewBox='0 0 24 24' aria-hidden=true>"
+                "<path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>Export catalogue</a></li>")
     nav = f"<ul class=sidebar-nav>{lis}</ul>"
     ident = current()
     name = ident["note"] if ident else "Guest"
@@ -1214,7 +1215,7 @@ def page(con, title, body, active="dashboard", q=""):
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
             f"<title>{E(title)} · Ingrex</title>"
             f"<link rel=stylesheet href='/app.css?v={CSS_HASH}'>"
-            f"<div class=shell>{sidebar(active)}"
+            f"<div class=shell>{sidebar(con, active)}"
             f"<div class=content>{topbar(con, q)}"
             f"<main class=wrap>{trial_strip(con)}{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
@@ -1680,7 +1681,7 @@ def view_dashboard(con, wl=frozenset(), trend_sel=""):
     return page(con, "Dashboard", body, active="dashboard")
 
 
-def view_search(con, params, wl=frozenset()):
+def view_search(con, params, wl=frozenset(), msg=""):
     q = params.get("q", [""])[0].strip()
     kind = params.get("kind", [""])[0]
     doc = params.get("doc", [""])[0]
@@ -1720,7 +1721,7 @@ def view_search(con, params, wl=frozenset()):
     export_link = (f"<a href='/export.csv{'?' + qs if qs else ''}' "
                    f"style='margin-left:auto;font-weight:700;font-size:12.5px' "
                    f"title='Download these results as a spreadsheet'>↓ Export CSV</a>"
-                   if rows else "")
+                   if rows and is_master(con) else "")
     cats = {r["category"] for r in con.execute("SELECT DISTINCT category FROM ingredient")}
     opts = lambda vals, sel, label: (
         f"<option value=''>{label}</option>" +
@@ -1730,6 +1731,7 @@ def view_search(con, params, wl=frozenset()):
       <div class=hi><h1>Search ingredients</h1>
         <div class=sub>Compare vendor price bands, documents, supplier type and market trend.</div></div>
       {category_pills(con, q if q in cats else "")}
+      {add_ingredient_form(con, q if not rows else "", msg)}
       <div class='panel pad'><form class=filters method=get action='/search'>
         <input type=search name=q placeholder='Ingredient, CAS, function…' value='{E(q)}'>
         <select name=kind>{opts(VENDOR_KINDS, kind, 'Any vendor type')}</select>
@@ -1748,10 +1750,47 @@ def view_search(con, params, wl=frozenset()):
         <tbody>{"".join(irow(r, wl, back, mv) for r in rows)}</tbody></table></div>''') if rows else
         f"<div class='panel pad' style='text-align:center'>"
         f"<p style='margin:0 0 10px'>No match for that search.</p>"
-        f"<p class=metaline style='margin:0 0 14px'>Looking for an ingredient not on Ingrex? "
-        f"Raise a sourcing request and our purchase team will find a supplier for you.</p>"
+        f"<p class=metaline style='margin:0 0 14px'>Add it to the catalogue yourself using the "
+        f"form above, or raise a sourcing request and our purchase team will find a supplier.</p>"
         f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>"}"""
     return page(con, "Search", body, active="search", q=q)
+
+
+def add_ingredient_form(con, prefill="", msg="", open_it=False):
+    """Anyone signed in can add a missing ingredient — the catalogue grows from
+    the people actually sourcing. No prices here: those come from suppliers."""
+    cats = [r["category"] for r in con.execute(
+        "SELECT DISTINCT category FROM ingredient ORDER BY category")]
+    opts = "".join(f"<option>{E(c)}</option>" for c in cats)
+    units = "".join(f"<option{' selected' if u == 'kg' else ''}>{u}</option>"
+                    for u in ("kg", "g", "litre", "piece"))
+    return f"""
+      <details class='panel pad addsup' style='margin-bottom:16px'{' open' if (open_it or prefill or msg) else ''}>
+        <summary>+ Add an ingredient to the catalogue</summary>
+        {f"<div class=ok style='margin-top:12px'>{E(msg)}</div>" if msg else ""}
+        <div class=metaline style='margin-top:10px'>Missing something you buy? Add it and it's
+          searchable for everyone. Suppliers and prices get attached later.</div>
+        <form method=post action='/ingredient/new' style='margin-top:12px'>
+          <div class=vform>
+            <label class=full>Ingredient name
+              <input name=name required maxlength=140 value='{E(prefill)}'
+                placeholder='e.g. Organic Ashwagandha Root Extract 10%'></label>
+            <label>Category
+              <select name=category><option value=''>Auto-detect</option>{opts}</select></label>
+            <label>CAS number <input name=cas maxlength=40 placeholder='optional'></label>
+            <label>Unit <select name=unit>{units}</select></label>
+            <label class=full>Function / use
+              <input name=functions maxlength=140
+                placeholder='e.g. Adaptogen, stress support'></label>
+            <label class=full>Description
+              <textarea name=description maxlength=600 rows=2
+                placeholder='Grade, assay, typical application…'
+                style='font:inherit;padding:9px 11px;border:1px solid var(--line);
+                       border-radius:9px'></textarea></label>
+          </div>
+          <button style='margin-top:12px'>Add ingredient</button>
+        </form>
+      </details>"""
 
 
 def export_csv(con, params):
@@ -2265,7 +2304,7 @@ def view_insights(con):
     return page(con, "Market insights", body, active="insights")
 
 
-def view_ingredient(con, ing_id, wl=frozenset()):
+def view_ingredient(con, ing_id, wl=frozenset(), msg=""):
     ing = con.execute("SELECT * FROM ingredient WHERE id=?", (ing_id,)).fetchone()
     if not ing:
         return None
@@ -2301,6 +2340,7 @@ def view_ingredient(con, ing_id, wl=frozenset()):
 
     return page(con, ing["name"], f"""
       <a class=back href='/'>← Ingredients</a>
+      {f"<div class=ok>{E(msg)}</div>" if msg else ""}
       <div class=titlerow><h1>{E(ing['name'])}</h1>{wbtn}</div>
       <p class=metaline>{E(ing['category'])} · CAS {E(ing['cas'])}</p>
       <div class=chips style='margin:9px 0 16px'>
@@ -2813,6 +2853,11 @@ def is_supplier():
     return supplier_vid() is not None
 
 
+def is_master(con):
+    """Master admin — or open dev mode, where no invite gate is configured."""
+    return is_admin() or not gate_active(con)
+
+
 def can_edit_vendor(con, vid):
     return is_admin() or not gate_active(con) or supplier_vid() == vid
 
@@ -3274,6 +3319,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                          ident["note"] if ident else "Guest", ident["code"] if ident else "",
                          self._client_ip(), is_admin())
             if url.path == "/export.csv":
+                if not is_master(con):                  # master admin only for now
+                    return self._redirect("/search")
                 return self._send(export_csv(con, params), ctype="text/csv; charset=utf-8",
                                   extra=[("Content-Disposition",
                                           "attachment; filename=ingrex-ingredients.csv")])
@@ -3316,7 +3363,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if url.path == "/":
                 out = view_dashboard(con, wl, params.get("trend", [""])[0])
             elif url.path == "/search":
-                out = view_search(con, params, wl)
+                out = view_search(con, params, wl, params.get("msg", [""])[0][:120])
             elif url.path == "/watchlist":
                 out = view_watchlist(con, wl)
             elif url.path == "/vendors":
@@ -3336,7 +3383,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif url.path == "/admin":
                 out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
-                out = view_ingredient(con, int(m[1]), wl)
+                out = view_ingredient(con, int(m[1]), wl, params.get("msg", [""])[0][:120])
             elif m := re.fullmatch(r"/vendor/(\d+)", url.path):
                 out = view_vendor(con, int(m[1]), params.get("msg", [""])[0][:80])
             else:
@@ -3466,6 +3513,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         f"{plan_name(plan)} selected, billed {cycle}. Our team will confirm by "
                         f"email before anything is charged — nothing is billed today."))
                 return self._redirect("/plans")
+            if path == "/ingredient/new":
+                # open to any signed-in user; suppliers/prices are attached separately
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                name = re.sub(r"\s+", " ", g("name"))[:140]
+                if not name:
+                    return self._redirect("/search")
+                dupe = con.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?)",
+                                   (name,)).fetchone()
+                if dupe:                      # already catalogued — just show it
+                    return self._redirect(f"/ingredient/{dupe['id']}?msg=" +
+                                          urllib.parse.quote("That ingredient is already listed."))
+                cat = g("category")
+                if not cat or cat not in [r["category"] for r in
+                                          con.execute("SELECT DISTINCT category FROM ingredient")]:
+                    cat = infer_category(name)
+                unit = g("unit") if g("unit") in ("kg", "g", "litre", "piece") else "kg"
+                iid = con.execute(
+                    "INSERT INTO ingredient(name,category,cas,functions,description,unit) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (name, cat, g("cas")[:40] or "—", g("functions")[:140] or cat,
+                     g("description")[:600] or f"{name} — added by the Ingrex community.",
+                     unit)).lastrowid
+                con.commit()
+                return self._redirect(f"/ingredient/{iid}?msg=" + urllib.parse.quote(
+                    "Added to the catalogue. Know a supplier? Raise a sourcing request."))
             if path == "/request_close":
                 f = urllib.parse.parse_qs(body)
                 rid = f.get("id", ["0"])[0]
@@ -3858,6 +3931,36 @@ def demo():
     assert csv_all.startswith(b"\xef\xbb\xbf"), "BOM so Excel opens it as UTF-8"
     assert csv_all.count(b"\r\n") == len(search_ingredients(con)) + 1, "header + one row each"
     assert len(export_csv(con, {"q": ["whey"]})) < len(csv_all), "query narrows the export"
+    # export is master-admin only: the link is hidden from an ordinary buyer
+    CTX.acct = None
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUYX.{sign_code('BUYX')}"})
+    con.execute("INSERT INTO invite(code,note,created) VALUES('BUYX','Buyer','d')")
+    con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('GATEX','x',0,'d')")
+    con.commit()
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUYX.{sign_code('BUYX')}"})
+    assert not is_master(con), "plain buyer is not master admin"
+    assert b"/export.csv" not in view_search(con, {}), "buyer sees no export link"
+    con.execute("INSERT INTO invite(code,note,is_admin,created) VALUES('ADMX','Boss',1,'d')")
+    con.commit()
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=ADMX.{sign_code('ADMX')}"})
+    assert is_master(con) and b"/export.csv" in view_search(con, {}), "admin keeps it"
+    CTX.ident = None
+    CTX.acct = None
+    con.execute("DELETE FROM invite WHERE code IN ('BUYX','GATEX','ADMX')")
+    con.commit()
+
+    # anyone can add a missing ingredient; duplicates fold into the existing one
+    before = len(search_ingredients(con))
+    assert b"/ingredient/new" in view_search(con, {}), "add form is on the search page"
+    con.execute("INSERT INTO ingredient(name,category,cas,functions,description,unit) "
+                "VALUES('Community Test Extract','Herbal Extract','—','test','t','kg')")
+    con.commit()
+    assert len(search_ingredients(con)) == before + 1
+    assert con.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?)",
+                       ("community test EXTRACT",)).fetchone(), "dupe check is case-insensitive"
+    assert infer_category("Ashwagandha Root Extract") == "Herbal Extract", "category auto-detect"
+    con.execute("DELETE FROM ingredient WHERE name='Community Test Extract'")
+    con.commit()
 
     # market movers + notifications feed derive from real price history
     mv = market_movers(con)
