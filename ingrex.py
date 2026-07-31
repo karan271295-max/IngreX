@@ -454,6 +454,7 @@ p{margin:0 0 11px}
   padding:0 22px;background:rgba(251,251,250,.8);backdrop-filter:saturate(180%) blur(14px);
   border-bottom:1px solid var(--line)}
 .top form{flex:1;max-width:520px;position:relative}
+.top .grow{flex:1}
 .top form svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);
   width:15px;height:15px;stroke:var(--mut);stroke-width:2;fill:none}
 .top input{width:100%;padding:8px 13px 8px 36px;border-radius:9px;font-size:13px;
@@ -577,6 +578,8 @@ a.icard:hover{border-color:#cfe0d7;transform:translateY(-2px);
 .iwrap .star{top:14px;right:14px}
 .itable td{vertical-align:middle}.itable tbody tr:hover{background:var(--acc-t)}
 .itable .starcell{width:34px;text-align:center;padding-right:0}
+.itable tr.crow td.starcell{border-left:3px solid var(--cc,var(--line))}
+.itable tr.crow:hover{background:color-mix(in srgb,var(--cc) 7%,#fff)}
 .star2{font-size:16px;color:#c2ccc6;text-decoration:none}
 .star2:hover{color:var(--gold)}.star2.on{color:var(--gold)}
 .icard .iprice{font-size:16px;font-weight:800;color:var(--ink);margin-top:6px}
@@ -760,7 +763,7 @@ button:hover{background:var(--acc-d)}button:active{transform:translateY(1px)}
   color:#4fe0a6;background:rgba(79,224,166,.14);padding:4px 9px;border-radius:20px}
 .ticker-track{flex:1;overflow:hidden;position:relative;height:100%}
 .ticker-run{display:flex;gap:34px;align-items:center;height:100%;width:max-content;
-  animation:tick 40s linear infinite}
+  animation:tick 18s linear infinite}
 .ticker:hover .ticker-run{animation-play-state:paused}
 .ticker-run a{color:rgba(255,255,255,.85);font-size:13px;white-space:nowrap;flex:none}
 .ticker-run a b{color:#fff}.ticker-run a span{color:rgba(255,255,255,.5)}
@@ -1377,10 +1380,12 @@ def irow(r, wl=frozenset(), back="/search", mv=None):
     trend = ("<span class=metaline>—</span>" if pct is None else
              f"<span class={'up' if pct >= 0 else 'down'}>{'▲' if pct >= 0 else '▼'} {abs(pct):.1f}%</span>")
     upd = f"{E(r['updated'])}" if r["updated"] else "—"
-    return (f"<tr onclick=\"location='/ingredient/{r['id']}'\" style='cursor:pointer'>"
+    cc = cat_color(r["category"])
+    return (f"<tr onclick=\"location='/ingredient/{r['id']}'\" style='cursor:pointer;--cc:{cc}'"
+            f" class=crow>"
             f"<td class=starcell>{star}</td>"
             f"<td><a href='/ingredient/{r['id']}'><b>{E(r['name'])}</b></a>"
-            f"<div class=metaline>{E(r['category'])}</div></td>"
+            f"<div class=metaline style='color:var(--cc);font-weight:700'>{E(r['category'])}</div></td>"
             f"<td><span class=price style='font-size:14px'>{price}</span></td>"
             f"<td>{r['vendors']}</td><td>{trend}</td><td class=metaline>{upd}</td></tr>")
 
