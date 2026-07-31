@@ -781,10 +781,15 @@ code.inv{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(
   .vpricesub{display:none}
 }
 .duo{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
-.trendsel{width:100%;font:inherit;font-size:14px;font-weight:600;padding:9px 12px;
-  border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);cursor:pointer;
-  appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7d75' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.trendfind{display:flex;align-items:center;gap:8px;position:relative}
+.trendfind svg{position:absolute;left:12px;width:15px;height:15px;stroke:var(--mut);
+  stroke-width:2;fill:none;pointer-events:none}
+.trendsel{flex:1;min-width:0;font:inherit;font-size:14px;font-weight:600;padding:9px 12px 9px 34px;
+  border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.trendsel:focus{outline:0;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-t)}
+.trendgo{flex:none;padding:9px 15px;font-size:13px;font-weight:700;border:0;border-radius:9px;
+  background:var(--acc);color:#fff;cursor:pointer}
+.trendgo:hover{background:var(--acc-d)}
 .chartbox{margin-top:14px}
 .chartbox svg{width:100%;height:auto;display:block}
 .axl{fill:var(--mut);font-size:11px;font-family:system-ui,sans-serif}
@@ -1028,9 +1033,12 @@ def sidebar(active):
         else:
             lis += (f"<li class='nav-item disabled'><a class=nav-link>"
                     f"{icon(path)}{label}<span class='nav-badge soon'>SOON</span></a></li>")
-    lis += ("<li class='nav-item mt-auto'><a class=nav-link href='/'>"
+    # was a second link to the dashboard; downloading the catalogue is what the
+    # icon already promised, and it's the thing buyers actually ask for
+    lis += ("<li class='nav-item mt-auto'><a class=nav-link href='/export.csv' "
+            "title='Download the full catalogue as a spreadsheet'>"
             "<svg class=nav-icon viewBox='0 0 24 24' aria-hidden=true>"
-            "<path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>Explore catalogue</a></li>")
+            "<path d='M12 3v12m0 0 4-4m-4 4-4-4M5 21h14'/></svg>Export catalogue</a></li>")
     nav = f"<ul class=sidebar-nav>{lis}</ul>"
     ident = current()
     name = ident["note"] if ident else "Guest"
@@ -1359,8 +1367,29 @@ def notifications(con):
     return items
 
 
+def _smooth_path(xs, ys, top, bot):
+    """Catmull-Rom through every point, emitted as cubic beziers.
+
+    Control points are clamped to the plot box so a sharp spike can't bow the
+    curve outside the chart area."""
+    if len(xs) < 3:
+        return "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
+    clamp = lambda v: max(top, min(bot, v))
+    d = [f"M {xs[0]:.1f},{ys[0]:.1f}"]
+    n = len(xs)
+    for i in range(n - 1):
+        x0, y0 = (xs[i - 1], ys[i - 1]) if i else (xs[0], ys[0])
+        x1, y1 = xs[i], ys[i]
+        x2, y2 = xs[i + 1], ys[i + 1]
+        x3, y3 = (xs[i + 2], ys[i + 2]) if i + 2 < n else (xs[-1], ys[-1])
+        c1x, c1y = x1 + (x2 - x0) / 6.0, clamp(y1 + (y2 - y0) / 6.0)
+        c2x, c2y = x2 - (x3 - x1) / 6.0, clamp(y2 - (y3 - y1) / 6.0)
+        d.append(f"C {c1x:.1f},{c1y:.1f} {c2x:.1f},{c2y:.1f} {x2:.1f},{y2:.1f}")
+    return " ".join(d)
+
+
 def price_chart(points, w=620, h=220):
-    """Interactive line chart — hover shows the price for any past month."""
+    """Smoothed price line with a marker on every month. Hover reads any point."""
     vals = [p for _, p in points]
     if len(vals) < 2:
         return "<p class=empty>No price history.</p>"
@@ -1368,48 +1397,54 @@ def price_chart(points, w=620, h=220):
     pad = (hi - lo) * 0.18 or hi * 0.1 or 1
     lo, hi = lo - pad, hi + pad
     rng = hi - lo or 1
-    pl, pr, pt, pb = 52, 14, 16, 28
+    pl, pr, pt, pb = 56, 16, 18, 30
     iw, ih, n = w - pl - pr, h - pt - pb, len(vals)
     xs = [pl + iw * i / (n - 1) for i in range(n)]
     ys = [pt + ih * (1 - (v - lo) / rng) for v in vals]
+    # a narrow band (say ₹43-45) renders "₹44, ₹44" at zero decimals — pick enough
+    # precision that the four gridline labels are always distinct
+    dec = 0 if rng / 3 >= 2 else (1 if rng / 3 >= 0.2 else 2)
     grid = ""
     for g in range(4):
         gy = pt + ih * g / 3
         grid += (f"<line x1={pl} y1={gy:.1f} x2={w - pr} y2={gy:.1f} stroke='var(--line)'/>"
-                 f"<text x={pl - 8} y={gy + 4:.1f} text-anchor=end class=axl>"
-                 f"₹{hi - rng * g / 3:,.0f}</text>")
-    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in zip(xs, ys))
-    area = f"{pl},{pt + ih} {line} {w - pr},{pt + ih}"
-    # data-bearing hover targets: one column per month carrying the label + price
-    hits, dots = "", ""
-    for (m, v), x, y in zip(points, xs, ys):
+                 f"<text x={pl - 10} y={gy + 4:.1f} text-anchor=end class=axl>"
+                 f"₹{hi - rng * g / 3:,.{dec}f}</text>")
+    curve = _smooth_path(xs, ys, pt, pt + ih)
+    area = f"{curve} L {xs[-1]:.1f},{pt + ih:.1f} L {xs[0]:.1f},{pt + ih:.1f} Z"
+    # a marker on every month, emphasised where the price actually moved
+    dots, hits = "", ""
+    for i, ((m, v), x, y) in enumerate(zip(points, xs, ys)):
         yr, mm = m.split("-")
         label = f"{MON_ABBR[int(mm)]} {yr}"
-        dots += f"<circle class=tdot cx={x:.1f} cy={y:.1f} r=1.8 fill='var(--acc)' opacity=.55/>"
+        moved = i > 0 and abs(v - vals[i - 1]) > 1e-9
+        r, op = (3.6, 1) if (moved or i in (0, n - 1)) else (2.4, .8)
+        dots += (f"<circle class=tdot cx={x:.1f} cy={y:.1f} r={r} fill='#fff' "
+                 f"stroke='var(--acc)' stroke-width=2 opacity={op}/>")
         hits += (f"<rect class=thit x={x - iw / (n - 1) / 2:.1f} y={pt} "
                  f"width={iw / (n - 1):.1f} height={ih} fill=transparent "
                  f"data-x='{x:.1f}' data-y='{y:.1f}' data-m='{E(label)}' data-v='₹{v:,.0f}'/>")
     step = max(1, n // 5)
-    xl = "<line x1={} y1={} x2={} y2={} stroke='var(--line)'/>".format(
-        pl, pt + ih, w - pr, pt + ih)
+    xl = f"<line x1={pl} y1={pt + ih} x2={w - pr} y2={pt + ih} stroke='var(--line)'/>"
     for i, (m, _) in enumerate(points):
         if not (i % step == 0 or i == n - 1):
             continue
         yr, mm = m.split("-")
         lab = MON_ABBR[int(mm)] + (f" '{yr[2:]}" if i in (0, n - 1) else "")
-        xl += (f"<text x={xs[i]:.1f} y={h - 7} text-anchor=middle class=axl-x>{lab}</text>")
-    gid = f"g{points[0][0]}{n}"
+        xl += f"<text x={xs[i]:.1f} y={h - 8} text-anchor=middle class=axl-x>{lab}</text>"
+    gid = "pcg" + re.sub(r"\W", "", f"{points[0][0]}{n}{int(vals[0])}")
     return (f"<div class=tchart>"
             f"<svg viewBox='0 0 {w} {h}' role=img aria-label='price trend'>"
-            f"<defs><linearGradient id={gid} x1=0 y1=0 x2=0 y2=1>"
-            f"<stop offset=0 stop-color='var(--acc)' stop-opacity=.10/>"
-            f"<stop offset=1 stop-color='var(--acc)' stop-opacity=0/></linearGradient></defs>"
-            f"{grid}<polygon points='{area}' fill='url(#{gid})'/>"
-            f"<polyline points='{line}' fill=none stroke='var(--acc)' stroke-width=1.75 "
-            f"stroke-linejoin=round stroke-linecap=round/>"
+            f"<defs><linearGradient id='{gid}' x1=0 y1=0 x2=0 y2=1>"
+            f"<stop offset='0' stop-color='var(--acc)' stop-opacity='0.20'/>"
+            f"<stop offset='1' stop-color='var(--acc)' stop-opacity='0'/>"
+            f"</linearGradient></defs>"
+            f"{grid}<path d='{area}' fill='url(#{gid})' stroke='none'/>"
+            f"<path d='{curve}' fill='none' stroke='var(--acc)' stroke-width='2.2' "
+            f"stroke-linejoin='round' stroke-linecap='round'/>"
             f"<line class=tguide x1=0 y1={pt} x2=0 y2={pt + ih} stroke='var(--acc)' "
-            f"stroke-dasharray='3 3' opacity=0/><circle class=tcursor r=4 fill='var(--acc)' "
-            f"stroke='#fff' stroke-width=1.5 opacity=0/>"
+            f"stroke-dasharray='3 3' opacity=0/><circle class=tcursor r=4.5 fill='var(--acc)' "
+            f"stroke='#fff' stroke-width=2 opacity=0/>"
             f"{dots}{xl}{hits}</svg><div class=ttip></div></div>")
 
 
@@ -1578,15 +1613,21 @@ def top_suppliers(con, limit=3):
 def view_dashboard(con, wl=frozenset(), trend_sel=""):
     rows = search_ingredients(con)
     mv = moves_map(con)
+    # accepts an id (from the datalist) or a typed name, exact then partial
+    trend_sel = (trend_sel or "").strip()
     tid = int(trend_sel) if trend_sel.isdigit() else None
-    feat = (next((r for r in rows if r["id"] == tid), None)
-            or max(rows, key=lambda r: r["vendors"] or 0))
+    feat = next((r for r in rows if r["id"] == tid), None)
+    if feat is None and trend_sel:
+        low = trend_sel.lower()
+        feat = (next((r for r in rows if r["name"].lower() == low), None)
+                or next((r for r in rows if low in r["name"].lower()), None))
+    if feat is None:
+        feat = max(rows, key=lambda r: r["vendors"] or 0)
     trend = con.execute(
         "SELECT month,price FROM price_point WHERE ingredient_id=? ORDER BY month",
         (feat["id"],)).fetchall()
-    trend_opts = "".join(
-        f"<option value={r['id']}{' selected' if r['id'] == feat['id'] else ''}>{E(r['name'])}</option>"
-        for r in rows)
+    # native datalist: type to filter, no JS, works on mobile keyboards
+    trend_opts = "".join(f"<option value='{E(r['name'])}'></option>" for r in rows)
     movers = ""
     for m in market_movers(con):
         up = m["pct"] >= 0
@@ -1613,7 +1654,15 @@ def view_dashboard(con, wl=frozenset(), trend_sel=""):
           <div class=ph><h3>Price trend</h3>
             <a href='/ingredient/{feat['id']}'>Details →</a></div>
           <form method=get action='/' style='margin:12px 0 4px'>
-            <select name=trend onchange='this.form.submit()' class=trendsel>{trend_opts}</select>
+            <div class=trendfind>
+              <svg viewBox='0 0 24 24' aria-hidden=true><circle cx=11 cy=11 r=7/>
+                <path d='M21 21l-4.3-4.3'/></svg>
+              <input name=trend list=trendlist class=trendsel autocomplete=off
+                value='{E(feat['name'])}' placeholder='Search an ingredient…'
+                aria-label='Search an ingredient to chart'>
+              <datalist id=trendlist>{trend_opts}</datalist>
+              <button class=trendgo>Show</button>
+            </div>
           </form>
           <div class=metaline>Monthly average landed price, ₹/{E(feat['unit'])}</div>
           <div class=chartbox>{price_chart([(m['month'], m['price']) for m in trend])}</div>
@@ -1818,9 +1867,19 @@ def view_admin(con):
                      f"<td>{E(iv['note'] or '')}</td><td>{status}</td>"
                      f"<td class=metaline>{E(iv['created'] or '')}</td><td>{action}</td></tr>")
 
+    # Loud, because silently losing every edit on deploy is the worst failure here
+    storage = ("<div class='trial'><i class=bar></i><span class=pin>Storage</span>"
+               "<span>Durable — edits are saved to Postgres and survive deploys.</span></div>"
+               if PG else
+               "<div class='trial warn'><i class=bar></i><span class=pin>Not saved</span>"
+               "<span><b>DATABASE_URL is not set.</b> This instance uses a temporary file, so "
+               "every supplier edit, review and request is wiped on the next deploy and the "
+               "catalogue reloads from suppliers.csv. Set DATABASE_URL to a Postgres "
+               "connection string to keep changes.</span></div>")
     body = f"""
       <div class=hi><h1>Admin</h1>
         <div class=sub>Manage sourcing requests, invites and see who's using the pilot right now.</div></div>
+      {storage}
       <div class='panel pad'>
         <div class=ph><h3>Sourcing requests</h3>
           <span class=count>{open_reqs} open · {len(reqs)} total</span></div>
@@ -2312,6 +2371,13 @@ def view_vendors(con, q="", bl=False):
            + (" WHERE " + " AND ".join(where) if where else "")
            + " ORDER BY a DESC NULLS LAST, v.name")
     rows = con.execute(sql, args).fetchall()
+    # "sea pold" should still find "See Pold Chemicals"
+    near = ""
+    if q and not rows:
+        hits = [h for h in _fuzzy_suggest(con, q) if h["t"] == "Supplier"][:4]
+        if hits:
+            near = ("<div class=dym>Did you mean " + " · ".join(
+                f"<a href='{h['h']}'>{E(h['l'])}</a>" for h in hits) + "?</div>")
     n_bl = con.execute("SELECT COUNT(*) c FROM vendor WHERE COALESCE(blacklisted,0)=1").fetchone()["c"]
     cards = "".join(f"""<a class=tile href='/vendor/{v['id']}'>
         <div class=ttl>{E(v['name'])}
@@ -2350,6 +2416,7 @@ def view_vendors(con, q="", bl=False):
           {'· blacklisted' if bl else ''}{f' · “{E(q)}”' if q else ''}</h2>
         {(f"<a class=count href='/vendors{'' if bl else '?bl=1'}'>"
           f"{'← All suppliers' if bl else f'View blacklisted ({n_bl})'}</a>") if admin else ""}</div>
+      {near}
       <div class=grid>{cards or "<p class=empty>No suppliers matched.</p>"}</div>""",
                 active="suppliers")
 
@@ -3584,6 +3651,25 @@ def demo():
         assert any(h["l"] == real["name"] for h in hits), "fuzzy rescues the typo"
         assert b"Did you mean" in view_search(con, {"q": ["Sea Pold"]}), "search page suggests it"
     assert suggest(con, "zzzznotreal") == [], "fuzzy does not invent matches"
+    if real:   # the suppliers page rescues the same typo
+        assert b"Did you mean" in view_vendors(con, "Sea Pold"), "vendors page suggests too"
+    assert b"class=tile" in view_vendors(con, "pold"), "literal supplier search still works"
+
+    # chart: smooth curve, a marker per month, and it survives a flat series
+    ch = price_chart([("2025-%02d" % m, 2400 + m * 11) for m in range(1, 13)])
+    assert " C " in ch and ch.count("class=tdot") == 12, "bezier curve + one dot per point"
+    assert "url(#pcg" in ch, "area gradient id is a valid reference"
+    assert "No price history" in price_chart([("2025-01", 10)]), "single point degrades"
+    # a narrow price band must not print the same axis label twice
+    narrow = price_chart([("2025-%02d" % m, 43 + (m % 3) * 0.7) for m in range(1, 13)])
+    labels = re.findall(r"class=axl>([^<]+)<", narrow)
+    assert len(labels) == len(set(labels)), f"duplicate axis labels: {labels}"
+    flat = price_chart([("2025-%02d" % m, 500) for m in range(1, 6)])
+    assert "tdot" in flat, "a flat series still renders"
+    # trend picker takes a typed name, not just an id
+    named = view_dashboard(con, frozenset(), search_ingredients(con)[0]["name"])
+    assert search_ingredients(con)[0]["name"].encode() in named, "chart follows the typed name"
+    assert b"<datalist id=trendlist" in named, "searchable, not a dropdown"
     # autocomplete: near-matches across ingredients + suppliers, typed prefix ranked first
     sg = suggest(con, "prot")
     assert sg and all({"t", "l", "h"} <= set(s) for s in sg)
@@ -3861,9 +3947,10 @@ def demo():
     con.commit()
 
     # price-trend selector: dashboard renders a picker and honours the choice
-    tid = search_ingredients(con)[2]["id"]
+    pick = search_ingredients(con)[2]
     assert b"class=trendsel" in view_dashboard(con)
-    assert f"value={tid} selected".encode() in view_dashboard(con, set(), str(tid))
+    # an id still works (datalist submits the name, old links submit the id)
+    assert E(pick["name"]).encode() in view_dashboard(con, set(), str(pick["id"]))
 
     # card: price band, colored accent, supplier count, updated — no image
     dash = view_dashboard(con)
