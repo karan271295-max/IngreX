@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.request
 from datetime import date, datetime
 
 # Invite-only gate. Access needs an invite code (see ensure_invites): set
@@ -28,6 +29,13 @@ from datetime import date, datetime
 AUTH_SECRET = (os.environ.get("INGREX_SECRET") or "ingrex-pilot-secret").encode()
 COOKIE = "ing_auth"
 COOKIE_MAXAGE = 60 * 60 * 24 * 30  # 30 days
+
+# Google sign-in (optional). Set both in the host env to switch the button on;
+# with either missing the login page simply doesn't offer Google.
+# Authorised redirect URI to register with Google: https://<your-host>/auth/google/callback
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+GOOGLE_ON = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "ingrex.db")
@@ -49,12 +57,13 @@ REQUEST_STATUS = ["Open", "In progress", "Sourcing vendor", "Fulfilled", "Closed
 TRIAL_DAYS = 30
 PLANS = [
     # key, name, ₹/month billed monthly, ₹/month billed yearly, blurb, features
-    ("starter", "Starter", 4999, 3999, "For small brands sourcing a few ingredients.",
-     ["Full ingredient catalogue", "Vendor price bands", "5 sourcing requests / month",
-      "Watchlist + price alerts", "Email support"]),
-    ("growth", "Growth", 12999, 9999, "For contract manufacturers buying at scale.",
+    ("starter", "Starter", 99, 79, "For small brands checking prices before they buy.",
+     ["Full ingredient catalogue", "Vendor price bands", "Watchlist on any ingredient",
+      "3 sourcing requests / month", "Email support"]),
+    ("growth", "Growth", 999, 799, "For contract manufacturers buying at scale.",
      ["Everything in Starter", "Unlimited sourcing requests", "12-month price history + trends",
-      "CSV export of any search", "Supplier documents (COA, MSDS, GMP)", "Priority support"]),
+      "CSV export of any search", "Supplier documents (COA, MSDS, GMP)",
+      "Supplier reviews + ratings", "Priority support"]),
     ("enterprise", "Enterprise", 0, 0, "For multi-plant buyers and distributors.",
      ["Everything in Growth", "Dedicated sourcing manager", "Custom vendor onboarding",
       "Contract price benchmarking", "API access", "SLA-backed support"]),
@@ -397,7 +406,7 @@ def ensure_invites(con):
     con.execute("""CREATE TABLE IF NOT EXISTS profile(
         code TEXT PRIMARY KEY, name TEXT, company TEXT, role TEXT,
         gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT,
-        phone TEXT, plan TEXT DEFAULT '', cycle TEXT DEFAULT '')""")
+        phone TEXT, plan TEXT DEFAULT '', cycle TEXT DEFAULT '', email TEXT)""")
     con.execute("""CREATE TABLE IF NOT EXISTS request(
         id INTEGER PRIMARY KEY, code TEXT, requester TEXT, company TEXT,
         ingredient TEXT NOT NULL, details TEXT, status TEXT DEFAULT 'Open',
@@ -412,12 +421,12 @@ def ensure_invites(con):
             con.execute("ALTER TABLE vendor ADD COLUMN blacklisted INTEGER DEFAULT 0")
         have = [r[1] for r in con.execute("PRAGMA table_info(profile)")]
         for col, decl in (("phone", "TEXT"), ("plan", "TEXT DEFAULT ''"),
-                          ("cycle", "TEXT DEFAULT ''")):
+                          ("cycle", "TEXT DEFAULT ''"), ("email", "TEXT")):
             if col not in have:
                 con.execute(f"ALTER TABLE profile ADD COLUMN {col} {decl}")
     else:        # Postgres: table may predate these columns, CREATE IF NOT EXISTS won't add them
         for col, decl in (("phone", "TEXT"), ("plan", "TEXT DEFAULT ''"),
-                          ("cycle", "TEXT DEFAULT ''")):
+                          ("cycle", "TEXT DEFAULT ''"), ("email", "TEXT")):
             con.execute(f"ALTER TABLE profile ADD COLUMN IF NOT EXISTS {col} {decl}")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
@@ -563,6 +572,32 @@ a.av{text-decoration:none}
 .nempty{padding:20px;text-align:center;color:var(--mut);font-size:13px}
 .mfoot{display:block;text-align:center;font-size:12px;font-weight:600;padding:10px;
   border-top:1px solid var(--line);margin-top:4px}
+/* account menu on the avatar — same <details> pattern as the bell */
+.acctmenu{position:relative}
+.acctmenu summary{list-style:none;cursor:pointer}
+.acctmenu summary::-webkit-details-marker{display:none}
+.acctmenu[open] .av{box-shadow:0 0 0 3px var(--acc-t)}
+.acctmenu .menu{position:absolute;top:48px;right:0;width:262px;background:#fff;
+  border:1px solid var(--line);border-radius:14px;z-index:30;padding:6px;
+  box-shadow:0 20px 50px -16px rgba(15,31,26,.3)}
+.awho{padding:11px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:5px}
+.awho .anm{font-size:13.5px;font-weight:750;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.awho .aem{font-size:12px;color:var(--mut);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aplan{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;
+  padding:7px 10px;border-radius:9px;background:var(--acc-t);border:1px solid #d7e8df}
+.aplan .pl{font-size:11.5px;font-weight:750;color:var(--acc-d)}
+.aplan .up{font-size:11px;font-weight:700;color:var(--acc-d);text-decoration:underline}
+.aplan.warn{background:#fbe9df;border-color:#e6c3ad}
+.aplan.warn .pl,.aplan.warn .up{color:#b4541c}
+.aitem{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;
+  font-size:13px;font-weight:600;color:var(--ink)}
+.aitem:hover{background:var(--line2)}
+.aitem svg{width:15px;height:15px;stroke:var(--mut);stroke-width:1.9;fill:none;
+  stroke-linecap:round;stroke-linejoin:round;flex:none}
+.aitem.danger{color:#c0392b;border-top:1px solid var(--line);margin-top:5px;border-radius:0 0 9px 9px}
+.aitem.danger svg{stroke:#c0392b}
 
 /* watchlist star on cards */
 .iwrap{position:relative}
@@ -1006,7 +1041,54 @@ def topbar(con, q=""):
             f"<span class=grow></span>"
             f"<span class=live title='Users active in the last 5 minutes'>"
             f"<span class=pulse></span>{online_count()} online</span>"
-            f"{bell}<span class=av>{E(initials(current()['note'] if current() else 'Guest'))}</span></div>")
+            f"{bell}{account_menu(con)}</div>")
+
+
+def account_menu(con):
+    """Avatar dropdown: who you are, what you're paying, and where to change it."""
+    ident = current()
+    name = ident["note"] if ident else "Guest"
+    p = account(con)
+    email = (p["email"] or "") if p and "email" in p.keys() else ""
+    plan, cycle, left = subscription(con)
+    if plan:
+        pill, warn = f"{plan_name(plan)} · {cycle or 'monthly'}", ""
+        cta = "Manage"
+    elif left is None:
+        pill, warn, cta = "Admin access", "", ""
+    elif left > 0:
+        pill = f"Free trial · {left} day{'' if left == 1 else 's'} left"
+        warn = " warn" if left <= 7 else ""
+        cta = "Upgrade"
+    else:
+        pill, warn, cta = "Trial ended", " warn", "Choose plan"
+    ic = lambda d: f"<svg viewBox='0 0 24 24'><path d='{d}'/></svg>"
+    items = [
+        ("Account settings", "/account", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+         "M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0"
+         "1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4"
+         "1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 4a2 2 0 1 1 4 0"
+         "1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4"),
+        ("Billing &amp; plans", "/plans", "M2 9h20M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10"
+         "a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zM6 15h4"),
+        ("Account information", "/account#details",
+         "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-5M12 8h.01"),
+        ("Security", "/account#security",
+         "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4"),
+    ]
+    links = "".join(f"<a class=aitem href='{href}'>{ic(d)}{label}</a>"
+                    for label, href, d in items)
+    return (f"<details class=acctmenu><summary title='Account'>"
+            f"<span class=av>{E(initials(name))}</span></summary>"
+            f"<div class=menu>"
+            f"<div class=awho><div class=anm>{E(name)}</div>"
+            f"{f'<div class=aem>{E(email)}</div>' if email else ''}"
+            f"<div class='aplan{warn}'><span class=pl>{E(pill)}</span>"
+            f"{f'<a class=up href=/plans>{cta}</a>' if cta else ''}</div></div>"
+            f"{links}"
+            f"<a class='aitem danger' href='/logout'>"
+            f"{ic('M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3')}"
+            f"Log out</a></div></details>")
 
 
 # Badge = unread. Hidden once this device has "seen" the current activity
@@ -1866,7 +1948,7 @@ def view_account(con, msg=""):
         status = "Trial ended"
     else:
         status = "Admin access"
-    n_watch = "—"
+    signed_google = bool(p and "email" in p.keys() and p["email"])
     reviews = requests_n = 0
     if ident:
         reviews = con.execute("SELECT COUNT(*) n FROM rating WHERE rater=?",
@@ -1874,8 +1956,8 @@ def view_account(con, msg=""):
         requests_n = con.execute("SELECT COUNT(*) n FROM request WHERE code=?",
                                  (ident["code"],)).fetchone()["n"]
     form = (f"""
-      <div class='panel pad'>
-        <div class=ph><h3>Your details</h3></div>
+      <div class='panel pad' id=details>
+        <div class=ph><h3>Account information</h3></div>
         <form method=post action='/account' style='margin-top:14px'>
           <div class=grid2>
             <div><label class=fl>Full name</label>
@@ -1911,6 +1993,7 @@ def view_account(con, msg=""):
               <div class=kv><span class=k>Status</span><span class=v>{status}</span></div>
               <div class=kv><span class=k>Signed in as</span>
                 <span class=v>{E(ident['note'] if ident else 'Guest')}</span></div>
+              {f"<div class=kv><span class=k>Email</span><span class=v>{v('email')}</span></div>" if signed_google else ""}
               <div class=kv><span class=k>Invite code</span>
                 <span class=v><code class=inv>{E(ident['code'] if ident else '—')}</code></span></div>
               <div class=kv><span class=k>Member since</span>
@@ -1928,10 +2011,19 @@ def view_account(con, msg=""):
                 <span class=v><a href='/watchlist'>View →</a></span></div>
             </div>
           </div>
-          <div class='panel pad'>
-            <div class=ph><h3>Session</h3></div>
-            <div class=metaline style='margin:8px 0 12px'>Signing out clears this device's
-              access. Your watchlist stays on this browser.</div>
+          <div class='panel pad' id=security>
+            <div class=ph><h3>Security</h3></div>
+            <div style='margin-top:10px'>
+              <div class=kv><span class=k>Sign-in method</span>
+                <span class=v>{'Google' if signed_google else 'Invite code'}</span></div>
+              <div class=kv><span class=k>Session</span>
+                <span class=v>This device · 30 days</span></div>
+              <div class=kv><span class=k>Access</span>
+                <span class=v>{'Admin' if is_admin() else 'Buyer'}</span></div>
+            </div>
+            <div class=metaline style='margin:12px 0'>Your invite code is the key to this
+              account — treat it like a password and don't share it. Lost it or think someone
+              else has it? Ask your Ingrex contact to revoke and reissue.</div>
             <a class=ghost href='/logout'
               style='display:inline-block;padding:9px 16px;border:1px solid var(--line);
                      border-radius:9px;font-weight:700;font-size:13px'>Log out</a>
@@ -2450,6 +2542,74 @@ def auth_cookie(code):
             "Path=/; HttpOnly; SameSite=Lax; Secure")
 
 
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s.]+\.[^@\s]{2,}$")
+
+
+def signup_account(con, name, email, company, verified=False):
+    """Find-or-create a buyer account for an email. Returns its invite code.
+
+    The email is a label; the credential is the signed cookie carrying the code
+    below. Self-serve email signup is unverified — someone can type an address
+    they don't own, but they gain only an empty trial account, not access to the
+    real owner's. A Google sign-in (verified=True) is trusted to own the address.
+    """
+    email = email.strip().lower()[:140]
+    row = con.execute("SELECT code FROM profile WHERE email=?", (email,)).fetchone()
+    if row:
+        live = con.execute("SELECT 1 FROM invite WHERE code=? AND revoked=0",
+                           (row["code"],)).fetchone()
+        if live:
+            return row["code"]
+    code = secrets.token_urlsafe(9)
+    today = date.today().isoformat()
+    con.execute("INSERT INTO invite(code,note,created) VALUES(?,?,?)", (code, name[:80], today))
+    # completed=0 sends them through /welcome to finish business type, GST and city
+    con.execute("INSERT INTO profile(code,name,company,role,gst,city,completed,created,email) "
+                "VALUES(?,?,?,'','','',0,?,?)", (code, name[:80], company[:120], today, email))
+    con.commit()
+    return code
+
+
+def oauth_state():
+    """Signed, self-expiring CSRF token for the Google round trip."""
+    stamp = str(int(time.time()))
+    return f"{stamp}.{hmac.new(AUTH_SECRET, stamp.encode(), hashlib.sha256).hexdigest()[:32]}"
+
+
+def oauth_state_ok(state):
+    stamp, _, sig = (state or "").partition(".")
+    if not stamp.isdigit():
+        return False
+    want = hmac.new(AUTH_SECRET, stamp.encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(sig, want) and (time.time() - int(stamp)) < 600
+
+
+def google_identity(code, redirect_uri):
+    """Swap an auth code for the signed-in user's profile. Returns (email, name) or None.
+
+    The id_token comes straight back from Google's token endpoint over TLS, so its
+    payload is trusted without a local signature check — that is the documented
+    server-side code-flow shortcut, and stdlib has no RSA verify anyway.
+    """
+    import base64
+    body = urllib.parse.urlencode({
+        "code": code, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": redirect_uri, "grant_type": "authorization_code"}).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=body,
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            tok = json.loads(r.read())
+        payload = tok["id_token"].split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except Exception:
+        return None
+    email = (claims.get("email") or "").strip().lower()
+    if not email or not claims.get("email_verified"):
+        return None
+    return email, (claims.get("name") or email.split("@")[0])[:80]
+
+
 def gate_active(con):
     return con.execute("SELECT 1 FROM invite WHERE revoked=0 LIMIT 1").fetchone() is not None
 
@@ -2539,82 +2699,131 @@ def can_review(con):
 LOGIN_CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  min-height:100vh;display:grid;place-items:center;padding:24px;overflow:hidden;
-  color:#f2fbf7;background:#04140f;position:relative}
-/* full-bleed background video + contrast tint */
-.vid{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
-.tint{position:fixed;inset:0;z-index:-1;
-  background:radial-gradient(130% 130% at 25% 15%,rgba(4,20,15,.35),rgba(3,14,10,.72) 70%,rgba(2,10,7,.9)),
-    linear-gradient(180deg,rgba(4,20,15,.2),rgba(4,20,15,.55))}
-
-/* premium glass card — ~80% transparent fill */
-.glass{position:relative;width:100%;max-width:410px;padding:46px 40px 40px;
-  border-radius:26px;overflow:hidden;
-  background:rgba(255,255,255,0);
-  backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);
-  border:1px solid rgba(255,255,255,.28);
-  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 -1px 0 rgba(255,255,255,.08) inset,
-    0 40px 100px -24px rgba(0,0,0,.7),0 10px 30px -14px rgba(0,0,0,.55)}
-/* fine light ring on the very edge for that premium bevel */
-.glass::after{content:"";position:absolute;inset:0;border-radius:26px;pointer-events:none;
-  padding:1px;background:linear-gradient(150deg,rgba(255,255,255,.55),transparent 40%,transparent 70%,rgba(255,255,255,.18));
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;mask-composite:exclude}
-
-.brand{font-size:36px;font-weight:800;letter-spacing:-.035em;color:#fff;
-  text-shadow:0 2px 20px rgba(0,0,0,.3)}
-.brand span{color:#5fe6ad}
-.tag{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;color:#d6f7e8;background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.22);padding:6px 13px;border-radius:20px}
-.lead{margin:22px 0 26px;font-size:14px;line-height:1.6;color:rgba(255,255,255,.82)}
-form{display:flex;flex-direction:column;gap:14px}
-.field{position:relative}
-.field svg{position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.7}
-input{width:100%;padding:16px 16px 16px 46px;font-size:15px;color:#fff;
-  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.24);
-  border-radius:14px;outline:0;transition:border-color .18s,box-shadow .18s,background .18s}
-input::placeholder{color:rgba(255,255,255,.6)}
-input:focus{border-color:rgba(95,230,173,.8);background:rgba(255,255,255,.16);
-  box-shadow:0 0 0 4px rgba(95,230,173,.2)}
-button{margin-top:2px;padding:16px;font-size:15px;font-weight:700;color:#04140f;cursor:pointer;
-  border:0;border-radius:14px;letter-spacing:.01em;
-  background:linear-gradient(135deg,#7af0c0,#12b884);
-  box-shadow:0 10px 30px -8px rgba(18,184,132,.65),0 1px 0 rgba(255,255,255,.5) inset;
-  transition:transform .08s,filter .18s,box-shadow .18s}
-button:hover{filter:brightness(1.05);box-shadow:0 14px 38px -8px rgba(18,184,132,.75),0 1px 0 rgba(255,255,255,.5) inset}
-button:active{transform:translateY(1px)}
-.err{margin-bottom:16px;padding:12px 14px;font-size:13px;font-weight:600;color:#ffd7c2;
-  background:rgba(214,90,40,.24);border:1px solid rgba(214,90,40,.45);border-radius:12px}
-.foot{margin-top:24px;font-size:12px;color:rgba(255,255,255,.6);text-align:center}
-@media(max-width:440px){.glass{padding:38px 26px}.brand{font-size:31px}}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0f1f1a;
+  background:#fff}
+a{color:#0d7a56;text-decoration:none}a:hover{text-decoration:underline}
+/* two panes: film on the left, the form on white at the right */
+.split{display:grid;grid-template-columns:1.02fr 1fr;min-height:100vh}
+.pane-l{position:relative;overflow:hidden;background:#04140f}
+.vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tint{position:absolute;inset:0;
+  background:radial-gradient(120% 120% at 20% 10%,rgba(4,20,15,.30),rgba(3,14,10,.70) 70%,rgba(2,10,7,.88)),
+    linear-gradient(180deg,rgba(4,20,15,.15),rgba(4,20,15,.6))}
+.pitch{position:absolute;inset:auto 0 0 0;padding:52px 54px;color:#f2fbf7}
+.pitch .brand{font-size:34px;font-weight:800;letter-spacing:-.035em;color:#fff}
+.pitch .brand span{color:#5fe6ad}
+.pitch h2{margin:18px 0 12px;font-size:26px;line-height:1.25;font-weight:750;
+  letter-spacing:-.02em;max-width:15ch}
+.pitch p{font-size:14px;line-height:1.6;color:rgba(255,255,255,.78);max-width:42ch}
+.pitch ul{list-style:none;display:flex;gap:20px;flex-wrap:wrap;margin-top:22px;
+  font-size:12.5px;font-weight:600;color:rgba(255,255,255,.86)}
+.pitch li{display:flex;align-items:center;gap:7px}
+.pitch li::before{content:"";width:6px;height:6px;border-radius:50%;background:#5fe6ad}
+/* right pane */
+.pane-r{display:grid;place-items:center;padding:40px 28px}
+.card{width:100%;max-width:392px}
+.card .mob{display:none;font-size:29px;font-weight:800;letter-spacing:-.035em;
+  color:#0f1f1a;margin-bottom:22px}
+.card .mob span{color:#0d7a56}
+.card h1{font-size:26px;letter-spacing:-.025em;margin-bottom:6px}
+.card .lead{font-size:13.5px;line-height:1.6;color:#6b7d75;margin-bottom:24px}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+  padding:13px;font-size:14px;font-weight:650;color:#1f2b26;background:#fff;
+  border:1px solid #dfe7e2;border-radius:12px;cursor:pointer;text-decoration:none;
+  transition:background .16s,box-shadow .16s}
+.gbtn:hover{background:#f7faf8;text-decoration:none;box-shadow:0 2px 10px -4px rgba(15,31,26,.2)}
+.or{display:flex;align-items:center;gap:12px;margin:20px 0;
+  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9aa8a1}
+.or::before,.or::after{content:"";flex:1;height:1px;background:#e6ece8}
+form{display:flex;flex-direction:column;gap:13px}
+label{font-size:11.5px;font-weight:700;color:#42544c;margin-bottom:5px;display:block}
+input{width:100%;padding:13px 14px;font-size:14.5px;color:#0f1f1a;background:#fff;
+  border:1px solid #dfe7e2;border-radius:11px;outline:0;
+  transition:border-color .16s,box-shadow .16s}
+input::placeholder{color:#9aa8a1}
+input:focus{border-color:#0d7a56;box-shadow:0 0 0 3px #e7f4ee}
+button.go{padding:14px;font-size:14.5px;font-weight:750;color:#fff;cursor:pointer;border:0;
+  border-radius:12px;background:#0d7a56;transition:background .16s,transform .08s}
+button.go:hover{background:#0a5d41}button.go:active{transform:translateY(1px)}
+.err{margin-bottom:16px;padding:11px 13px;font-size:13px;font-weight:650;color:#b4541c;
+  background:#fbe9df;border:1px solid #e6c3ad;border-radius:11px}
+.note{margin-top:18px;font-size:12.5px;color:#6b7d75;text-align:center}
+.fine{margin-top:26px;font-size:11.5px;line-height:1.6;color:#9aa8a1;text-align:center}
+.trialpin{display:inline-flex;align-items:center;gap:7px;margin-bottom:18px;padding:6px 12px;
+  font-size:11px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;
+  color:#0a5d41;background:#e7f4ee;border:1px solid #d7e8df;border-radius:20px}
+@media(max-width:880px){
+  .split{grid-template-columns:1fr}
+  .pane-l{display:none}
+  .card .mob{display:block}
+  .pane-r{align-items:start;padding-top:52px}
+}
 """
 
 
-def login_page(err="", prefill=""):
-    key = ("<svg width=18 height=18 viewBox='0 0 24 24' fill=none stroke='#bff3dd' "
-           "stroke-width=2 stroke-linecap=round><circle cx=8 cy=15 r=4/>"
-           "<path d='M10.8 12.2 21 2M17 6l2 2M14 9l2 2'/></svg>")
+GOOGLE_G = ("<svg width=17 height=17 viewBox='0 0 48 48' aria-hidden=true>"
+            "<path fill='#4285F4' d='M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.1z'/>"
+            "<path fill='#34A853' d='M24 46c5.9 0 10.9-2 14.5-5.4l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.4 46 24 46z'/>"
+            "<path fill='#FBBC05' d='M11.8 28.2c-.4-1.3-.7-2.7-.7-4.2s.3-2.9.7-4.2v-5.7H4.5C3 17 2 20.4 2 24s1 7 2.5 9.9l7.3-5.7z'/>"
+            "<path fill='#EA4335' d='M24 10.8c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 29.9 2 24 2 15.4 2 8.1 6.9 4.5 14.1l7.3 5.7c1.7-5.2 6.5-9 12.2-9z'/></svg>")
+
+
+def login_page(err="", prefill="", mode="signin", d=None):
+    """Split screen: the film on the left, sign-in / sign-up on white at the right."""
+    d = d or {}
+    v = lambda k: E(d.get(k, ""))
+    google = (f"<a class=gbtn href='/auth/google'>{GOOGLE_G}"
+              f"Continue with Google</a><div class=or>or</div>") if GOOGLE_ON else ""
+    if mode == "signup":
+        head = ("<span class=trialpin>✦ First month free</span>"
+                "<h1>Create your account</h1>"
+                "<p class=lead>Full access to the catalogue, vendor price bands and sourcing "
+                "requests for 30 days. No card needed.</p>")
+        form = (f"<form method=post action='/signup'>"
+                f"<div><label>Full name</label>"
+                f"<input name=name value='{v('name')}' required maxlength=80 "
+                f"placeholder='e.g. Karan Sharma' autofocus></div>"
+                f"<div><label>Work email</label>"
+                f"<input name=email type=email value='{v('email')}' required maxlength=140 "
+                f"placeholder='you@company.com' autocomplete=email></div>"
+                f"<div><label>Company</label>"
+                f"<input name=company value='{v('company')}' required maxlength=120 "
+                f"placeholder='e.g. Nutraform Labs'></div>"
+                f"<button class=go>Start free month</button></form>"
+                f"<div class=note>Already have access? <a href='/login'>Sign in</a></div>")
+    else:
+        head = ("<h1>Sign in</h1>"
+                "<p class=lead>Use your Google account, or the invite code from your "
+                "Ingrex contact.</p>")
+        form = (f"<form method=post action='/login'>"
+                f"<div><label>Invite code</label>"
+                f"<input name=code value='{E(prefill)}' required maxlength=64 "
+                f"placeholder='Invite code' autocomplete=off spellcheck=false></div>"
+                f"<button class=go>Enter portal</button></form>"
+                f"<div class=note>New to Ingrex? <a href='/signup'>Start a free month</a></div>")
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
             f"<meta name=viewport content='width=device-width,initial-scale=1'>"
-            f"<title>Sign in · Ingrex</title><style>{LOGIN_CSS}</style>"
+            f"<title>{'Create account' if mode == 'signup' else 'Sign in'} · Ingrex</title>"
+            f"<style>{LOGIN_CSS}</style>"
+            f"<div class=split>"
+            f"<div class=pane-l>"
             f"<video class=vid autoplay muted loop playsinline preload=auto>"
             f"<source src='/bg.mp4' type='video/mp4'></video>"
             f"<div class=tint></div>"
-            f"<div class=glass>"
-            f"<div class=brand>ingre<span>x</span></div>"
-            f"<div class=tag>Nutraceutical sourcing · Invite only</div>"
-            f"<p class=lead>Enter the invite code from your Ingrex contact. "
-            f"Don't have one? Ask your account manager for an invite.</p>"
+            f"<div class=pitch><div class=brand>ingre<span>x</span></div>"
+            f"<h2>Source ingredients on real market prices.</h2>"
+            f"<p>Compare vendor price bands, 12-month trends and verified supplier "
+            f"documents across the nutraceutical catalogue.</p>"
+            f"<ul><li>67 ingredients</li><li>48 verified suppliers</li>"
+            f"<li>12-month price history</li></ul></div></div>"
+            f"<div class=pane-r><div class=card>"
+            f"<div class=mob>ingre<span>x</span></div>"
+            f"{head}"
             f"{f'<div class=err>{E(err)}</div>' if err else ''}"
-            f"<form method=post action='/login'>"
-            f"<div class=field>{key}"
-            f"<input name=code value='{E(prefill)}' placeholder='Invite code' required "
-            f"autofocus autocomplete=off spellcheck=false></div>"
-            f"<button>Enter portal</button></form>"
-            f"<div class=foot>Ingrex · B2B Ingredient Intelligence</div>"
-            f"</div></html>").encode()
+            f"{google}{form}"
+            f"<div class=fine>By continuing you agree to Ingrex's terms and privacy policy. "
+            f"Prices shown are indicative market bands, not live quotes.</div>"
+            f"</div></div></div></html>").encode()
 
 
 WELCOME_CSS = """
@@ -2777,6 +2986,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             remaining -= len(chunk)
         f.close()
 
+    def _oauth_redirect(self):
+        """Callback URL for this deployment — must match what's registered with Google."""
+        proto = self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() or "http"
+        host = self.headers.get("Host", "localhost")
+        return f"{proto}://{host}/auth/google/callback"
+
     def _client_ip(self):
         return (self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
                 or self.client_address[0])
@@ -2796,6 +3011,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             CTX.ident = ident
             if url.path == "/login":
                 return self._send(login_page(prefill=params.get("code", [""])[0][:64]))
+            if url.path == "/signup":
+                return self._send(login_page(mode="signup"))
+            if url.path == "/auth/google":
+                if not GOOGLE_ON:
+                    return self._redirect("/login")
+                q = urllib.parse.urlencode({
+                    "client_id": GOOGLE_CLIENT_ID, "redirect_uri": self._oauth_redirect(),
+                    "response_type": "code", "scope": "openid email profile",
+                    "state": oauth_state(), "prompt": "select_account"})
+                return self._redirect("https://accounts.google.com/o/oauth2/v2/auth?" + q)
+            if url.path == "/auth/google/callback":
+                if not (GOOGLE_ON and oauth_state_ok(params.get("state", [""])[0])):
+                    return self._send(login_page("Sign-in link expired — try again."), 400)
+                got = google_identity(params.get("code", [""])[0], self._oauth_redirect())
+                if not got:
+                    return self._send(login_page("Google sign-in failed. Try again."), 401)
+                email, name = got
+                code = signup_account(con, name, email, "", verified=True)
+                return self._redirect("/", auth_cookie(code))
             if url.path == "/logout":
                 return self._redirect("/login", f"{COOKIE}=; Max-Age=0; Path=/; "
                                       "HttpOnly; SameSite=Lax; Secure")
@@ -2895,6 +3129,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self._redirect(dest, auth_cookie(code))
                 time.sleep(1)   # ponytail: crude brute-force damper on code guessing
                 return self._send(login_page("Invalid or revoked invite code.", code), 401)
+            if path == "/signup":
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                d = {"name": g("name")[:80], "email": g("email")[:140],
+                     "company": g("company")[:120]}
+                if not (d["name"] and d["company"] and EMAIL_RE.match(d["email"])):
+                    return self._send(login_page("Enter your name, company and a valid "
+                                                 "work email.", mode="signup", d=d), 400)
+                code = signup_account(con, d["name"], d["email"], d["company"])
+                return self._redirect("/welcome", auth_cookie(code))
             if gated and not ident:
                 return self._redirect("/login")
             if path == "/welcome":
@@ -3258,6 +3502,30 @@ def demo():
     con.execute("DELETE FROM profile WHERE code='BUY1'")
     con.commit()
     assert subscription(con) == ("", "", None), "no profile (admin/dev) => no trial clock"
+
+    # self-serve signup: creates a live account, is idempotent per email, and
+    # lands the user in onboarding rather than straight into the portal
+    code1 = signup_account(con, "Arjun", "Arjun@Nutraform.COM ", "Nutraform")
+    assert identity(con, {"Cookie": f"{COOKIE}={code1}.{sign_code(code1)}"}), "signup logs in"
+    prof = con.execute("SELECT * FROM profile WHERE code=?", (code1,)).fetchone()
+    assert prof["email"] == "arjun@nutraform.com", "email normalised"
+    assert not prof["completed"], "new signup still has to finish onboarding"
+    assert signup_account(con, "Arjun", "arjun@nutraform.com", "X") == code1, "same email reuses"
+    # a revoked account doesn't resurrect on the old code
+    con.execute("UPDATE invite SET revoked=1 WHERE code=?", (code1,))
+    con.commit()
+    assert signup_account(con, "Arjun", "arjun@nutraform.com", "X") != code1, "revoked => new code"
+    assert EMAIL_RE.match("a@b.co") and not EMAIL_RE.match("nope@nodot")
+    # Google CSRF token: signed, and not forgeable by editing the timestamp
+    st = oauth_state()
+    assert oauth_state_ok(st) and not oauth_state_ok(st.replace(".", "x.", 1))
+    assert not oauth_state_ok("9999999999.deadbeef") and not oauth_state_ok("")
+    # login screen offers signup, and Google only when credentials are configured
+    assert b"/signup" in login_page() and b"Start free month" in login_page(mode="signup")
+    assert (b"auth/google" in login_page()) == GOOGLE_ON
+    con.execute("DELETE FROM invite WHERE code IN (SELECT code FROM profile WHERE email LIKE '%nutraform%')")
+    con.execute("DELETE FROM profile WHERE email LIKE '%nutraform%'")
+    con.commit()
 
     # CSV export mirrors the search filters and is spreadsheet-readable
     csv_all = export_csv(con, {})
