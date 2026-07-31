@@ -39,7 +39,6 @@ GOOGLE_ON = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(HERE, "ingrex.db")
-LOGIN_VIDEO = os.path.join(HERE, "185365-875417518.mp4")  # served at /bg.mp4
 
 DOC_TYPES = ["COA", "MSDS", "Spec Sheet", "GMP", "FSSAI", "ISO 22000",
              "Halal", "Kosher", "Organic (NPOP/USDA)", "Allergen Statement",
@@ -2746,67 +2745,163 @@ def can_review(con):
 LOGIN_CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0f1f1a;
-  background:#fff}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,
+  Helvetica,Arial,sans-serif;color:#0f1f1a;background:#eef2f0;
+  letter-spacing:-.006em;-webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;font-variant-numeric:tabular-nums}
 a{color:#0d7a56;text-decoration:none}a:hover{text-decoration:underline}
-/* two panes: film on the left, the form on white at the right */
-.split{display:grid;grid-template-columns:1.02fr 1fr;min-height:100vh}
-.pane-l{position:relative;overflow:hidden;background:#04140f}
-.vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.tint{position:absolute;inset:0;
-  background:radial-gradient(120% 120% at 20% 10%,rgba(4,20,15,.30),rgba(3,14,10,.70) 70%,rgba(2,10,7,.88)),
-    linear-gradient(180deg,rgba(4,20,15,.15),rgba(4,20,15,.6))}
-.pitch{position:absolute;inset:auto 0 0 0;padding:52px 54px;color:#f2fbf7}
-.pitch .brand{font-size:34px;font-weight:800;letter-spacing:-.035em;color:#fff}
+/* two rounded panels floating on a soft page */
+.split{display:grid;grid-template-columns:1.04fr 1fr;gap:14px;
+  min-height:100vh;padding:14px}
+.pane{border-radius:22px;overflow:hidden;position:relative}
+.pane-l{background:#04140f;
+  box-shadow:0 30px 80px -40px rgba(4,20,15,.75),0 2px 8px -2px rgba(4,20,15,.25)}
+/* the shader paints here; this gradient is what shows if WebGL is unavailable */
+.gradcanvas{position:absolute;inset:0;width:100%;height:100%;display:block;
+  background:radial-gradient(120% 100% at 25% 20%,#12b884 0%,#0a5d41 38%,#04140f 78%)}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.16;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E")}
+.pitch{position:absolute;inset:auto 0 0 0;padding:46px 46px 44px;color:#f2fbf7;
+  background:linear-gradient(180deg,rgba(4,20,15,0),rgba(4,20,15,.55) 45%,rgba(3,14,10,.8))}
+.pitch .brand{font-size:31px;font-weight:800;letter-spacing:-.038em;color:#fff}
 .pitch .brand span{color:#5fe6ad}
-.pitch h2{margin:18px 0 12px;font-size:26px;line-height:1.25;font-weight:750;
-  letter-spacing:-.02em;max-width:15ch}
-.pitch p{font-size:14px;line-height:1.6;color:rgba(255,255,255,.78);max-width:42ch}
-.pitch ul{list-style:none;display:flex;gap:20px;flex-wrap:wrap;margin-top:22px;
-  font-size:12.5px;font-weight:600;color:rgba(255,255,255,.86)}
-.pitch li{display:flex;align-items:center;gap:7px}
-.pitch li::before{content:"";width:6px;height:6px;border-radius:50%;background:#5fe6ad}
-/* right pane */
-.pane-r{display:grid;place-items:center;padding:40px 28px}
-.card{width:100%;max-width:392px}
-.card .mob{display:none;font-size:29px;font-weight:800;letter-spacing:-.035em;
-  color:#0f1f1a;margin-bottom:22px}
+.pitch h2{margin:16px 0 11px;font-size:27px;line-height:1.22;font-weight:700;
+  letter-spacing:-.028em;max-width:15ch;color:#fff}
+.pitch p{font-size:13.5px;line-height:1.62;color:rgba(255,255,255,.72);max-width:40ch}
+.pitch ul{list-style:none;display:flex;gap:9px;flex-wrap:wrap;margin-top:24px}
+.pitch li{font-size:11.5px;font-weight:650;color:rgba(255,255,255,.9);
+  padding:6px 12px;border-radius:20px;backdrop-filter:blur(10px);
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16)}
+/* right panel */
+.pane-r{background:#fff;display:grid;place-items:center;padding:40px 30px;
+  border:1px solid #e2e8e4;
+  box-shadow:0 30px 80px -50px rgba(15,31,26,.3),0 1px 3px -1px rgba(15,31,26,.06)}
+.card{width:100%;max-width:376px}
+.card .mob{display:none;font-size:27px;font-weight:800;letter-spacing:-.038em;
+  color:#0f1f1a;margin-bottom:20px}
 .card .mob span{color:#0d7a56}
-.card h1{font-size:26px;letter-spacing:-.025em;margin-bottom:6px}
-.card .lead{font-size:13.5px;line-height:1.6;color:#6b7d75;margin-bottom:24px}
+.card h1{font-size:25px;letter-spacing:-.028em;margin-bottom:6px;font-weight:700}
+.card .lead{font-size:13.5px;line-height:1.6;color:#6b7d75;margin-bottom:26px}
 .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
-  padding:13px;font-size:14px;font-weight:650;color:#1f2b26;background:#fff;
-  border:1px solid #dfe7e2;border-radius:12px;cursor:pointer;text-decoration:none;
-  transition:background .16s,box-shadow .16s}
-.gbtn:hover{background:#f7faf8;text-decoration:none;box-shadow:0 2px 10px -4px rgba(15,31,26,.2)}
-.or{display:flex;align-items:center;gap:12px;margin:20px 0;
-  font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9aa8a1}
+  padding:12px;font-size:14px;font-weight:600;color:#1f2b26;background:#fff;
+  border:1px solid #dfe7e2;border-radius:11px;cursor:pointer;text-decoration:none;
+  transition:background .16s,box-shadow .16s,border-color .16s}
+.gbtn:hover{background:#f7faf8;text-decoration:none;border-color:#cfdcd5;
+  box-shadow:0 3px 12px -5px rgba(15,31,26,.25)}
+.or{display:flex;align-items:center;gap:12px;margin:19px 0;
+  font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#a3b0a9}
 .or::before,.or::after{content:"";flex:1;height:1px;background:#e6ece8}
 form{display:flex;flex-direction:column;gap:13px}
-label{font-size:11.5px;font-weight:700;color:#42544c;margin-bottom:5px;display:block}
-input{width:100%;padding:13px 14px;font-size:14.5px;color:#0f1f1a;background:#fff;
+label{font-size:11.5px;font-weight:700;color:#42544c;margin-bottom:6px;display:block}
+input{width:100%;padding:12px 14px;font-size:14.5px;color:#0f1f1a;background:#fbfcfb;
   border:1px solid #dfe7e2;border-radius:11px;outline:0;
-  transition:border-color .16s,box-shadow .16s}
-input::placeholder{color:#9aa8a1}
-input:focus{border-color:#0d7a56;box-shadow:0 0 0 3px #e7f4ee}
-button.go{padding:14px;font-size:14.5px;font-weight:750;color:#fff;cursor:pointer;border:0;
-  border-radius:12px;background:#0d7a56;transition:background .16s,transform .08s}
-button.go:hover{background:#0a5d41}button.go:active{transform:translateY(1px)}
+  transition:border-color .16s,box-shadow .16s,background .16s}
+input::placeholder{color:#a3b0a9}
+input:focus{border-color:#0d7a56;background:#fff;box-shadow:0 0 0 3px #e7f4ee}
+button.go{padding:13px;font-size:14.5px;font-weight:700;color:#fff;cursor:pointer;border:0;
+  border-radius:11px;background:linear-gradient(180deg,#0f8a61,#0a5d41);
+  box-shadow:0 8px 20px -10px rgba(13,122,86,.8),0 1px 0 rgba(255,255,255,.14) inset;
+  transition:filter .16s,transform .08s,box-shadow .16s}
+button.go:hover{filter:brightness(1.06);box-shadow:0 12px 26px -10px rgba(13,122,86,.9),
+  0 1px 0 rgba(255,255,255,.14) inset}
+button.go:active{transform:translateY(1px)}
 .err{margin-bottom:16px;padding:11px 13px;font-size:13px;font-weight:650;color:#b4541c;
   background:#fbe9df;border:1px solid #e6c3ad;border-radius:11px}
-.note{margin-top:18px;font-size:12.5px;color:#6b7d75;text-align:center}
-.fine{margin-top:26px;font-size:11.5px;line-height:1.6;color:#9aa8a1;text-align:center}
+.note{margin-top:20px;font-size:12.5px;color:#6b7d75;text-align:center}
+.fine{margin-top:28px;font-size:11.5px;line-height:1.6;color:#a3b0a9;text-align:center}
 .trialpin{display:inline-flex;align-items:center;gap:7px;margin-bottom:18px;padding:6px 12px;
-  font-size:11px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;
-  color:#0a5d41;background:#e7f4ee;border:1px solid #d7e8df;border-radius:20px}
+  font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;
+  color:#0a5d41;background:#eaf3ee;border:1px solid #d7e8df;border-radius:20px}
+:focus-visible{outline:2px solid #0d7a56;outline-offset:2px}
 @media(max-width:880px){
-  .split{grid-template-columns:1fr}
+  .split{grid-template-columns:1fr;padding:0;gap:0;min-height:100dvh}
   .pane-l{display:none}
+  .pane-r{border-radius:0;border:0;box-shadow:none;align-items:start;padding-top:54px}
   .card .mob{display:block}
-  .pane-r{align-items:start;padding-top:52px}
 }
+@media(prefers-reduced-motion:reduce){.grain{display:none}}
 """
 
+
+SHADER_JS = """<script>
+(function(){
+var c=document.getElementById('grad');if(!c)return;
+var gl=c.getContext('webgl',{antialias:false,alpha:false,powerPreference:'low-power'})
+     ||c.getContext('experimental-webgl');
+if(!gl)return;                       // CSS gradient underneath stays visible
+var VS='attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+var FS=[
+'precision highp float;',
+'uniform vec2 u_res;uniform float u_t;',
+'vec2 hash(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));',
+'return -1.+2.*fract(sin(p)*43758.5453123);}',
+'float noise(vec2 p){const float K1=0.366025404,K2=0.211324865;',
+'vec2 i=floor(p+(p.x+p.y)*K1);vec2 a=p-i+(i.x+i.y)*K2;',
+'float m=step(a.y,a.x);vec2 o=vec2(m,1.-m);vec2 b=a-o+K2;vec2 c2=a-1.+2.*K2;',
+'vec3 h=max(0.5-vec3(dot(a,a),dot(b,b),dot(c2,c2)),0.0);',
+'vec3 n=h*h*h*h*vec3(dot(a,hash(i)),dot(b,hash(i+o)),dot(c2,hash(i+1.)));',
+'return dot(n,vec3(70.));}',
+// a mesh gradient, not fbm terrain: four orbiting colour wells, softly blended.
+// stacked domain-warped fbm looks like marble veining at this scale, not a gradient.
+'float well(vec2 uv,vec2 c,float r){return exp(-dot(uv-c,uv-c)/(r*r));}',
+'void main(){',
+' vec2 uv=gl_FragCoord.xy/u_res.xy;',
+' float ar=u_res.x/u_res.y;',
+' vec2 p=vec2(uv.x*ar,uv.y);',
+' float t=u_t*0.12;',
+// one gentle warp for organic edges — amplitude stays low so masses stay smooth
+' p+=0.055*vec2(noise(p*1.5+vec2(0.0,t*0.6)),noise(p*1.5+vec2(4.7,-t*0.5)));',
+' vec3 deep=vec3(0.008,0.055,0.043);',
+' vec3 pine=vec3(0.031,0.286,0.204);',
+' vec3 emer=vec3(0.055,0.502,0.353);',
+' vec3 mint=vec3(0.376,0.937,0.718);',
+' vec2 c1=vec2(0.30*ar+0.16*ar*sin(t*0.70),0.74+0.10*cos(t*0.53));',
+' vec2 c2=vec2(0.78*ar+0.13*ar*cos(t*0.44),0.28+0.13*sin(t*0.61));',
+' vec2 c3=vec2(0.55*ar+0.18*ar*sin(t*0.35+2.1),0.55+0.15*cos(t*0.40+1.2));',
+' vec2 c4=vec2(0.16*ar+0.10*ar*cos(t*0.58+0.7),0.20+0.09*sin(t*0.47+2.6));',
+' float w1=well(p,c1,0.34),w2=well(p,c2,0.40);',
+' float w3=well(p,c3,0.30),w4=well(p,c4,0.33);',
+' float s=w1+w2+w3+w4+0.16;',
+' vec3 col=(mint*w1+pine*w2+emer*w3+mint*0.45*w4+deep*0.16)/s;',
+// lift the brightest well further so the panel has a light source, not flat wash
+' col+=mint*smoothstep(0.45,1.0,w1/(s*0.7))*0.30;',
+' col=mix(col,deep,smoothstep(0.30,1.05,length((uv-vec2(0.32,0.72))*vec2(1.0,0.80))));',
+' col+=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-0.5)*0.014;',
+' gl_FragColor=vec4(col,1.0);}'
+].join('\\n');
+function sh(t,src){var s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
+return gl.getShaderParameter(s,gl.COMPILE_STATUS)?s:null;}
+var vs=sh(gl.VERTEX_SHADER,VS),fs=sh(gl.FRAGMENT_SHADER,FS);
+if(!vs||!fs)return;
+var pr=gl.createProgram();gl.attachShader(pr,vs);gl.attachShader(pr,fs);gl.linkProgram(pr);
+if(!gl.getProgramParameter(pr,gl.LINK_STATUS))return;
+gl.useProgram(pr);
+var buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+var loc=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+var uR=gl.getUniformLocation(pr,'u_res'),uT=gl.getUniformLocation(pr,'u_t');
+function size(){
+  var d=Math.min(window.devicePixelRatio||1,1.5);   // half-res on retina: this is a backdrop
+  var w=Math.max(1,Math.round(c.clientWidth*d)),h=Math.max(1,Math.round(c.clientHeight*d));
+  if(c.width!==w||c.height!==h){c.width=w;c.height=h;gl.viewport(0,0,w,h);}
+  gl.uniform2f(uR,c.width,c.height);
+}
+var still=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var t0=Date.now(),raf=0;
+function frame(){
+  size();
+  gl.uniform1f(uT,still?18.0:(Date.now()-t0)/1000);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  if(!still&&!document.hidden)raf=requestAnimationFrame(frame);else raf=0;
+}
+frame();
+// stop burning GPU on a backgrounded tab
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&!still&&!raf)raf=requestAnimationFrame(frame);});
+window.addEventListener('resize',function(){if(still||!raf)frame();});
+})();
+</script>"""
 
 GOOGLE_G = ("<svg width=17 height=17 viewBox='0 0 48 48' aria-hidden=true>"
             "<path fill='#4285F4' d='M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.1z'/>"
@@ -2853,24 +2948,23 @@ def login_page(err="", prefill="", mode="signin", d=None):
             f"<title>{'Create account' if mode == 'signup' else 'Sign in'} · Ingrex</title>"
             f"<style>{LOGIN_CSS}</style>"
             f"<div class=split>"
-            f"<div class=pane-l>"
-            f"<video class=vid autoplay muted loop playsinline preload=auto>"
-            f"<source src='/bg.mp4' type='video/mp4'></video>"
-            f"<div class=tint></div>"
+            f"<div class='pane pane-l'>"
+            f"<canvas id=grad class=gradcanvas aria-hidden=true></canvas>"
+            f"<div class=grain aria-hidden=true></div>"
             f"<div class=pitch><div class=brand>ingre<span>x</span></div>"
             f"<h2>Source ingredients on real market prices.</h2>"
             f"<p>Compare vendor price bands, 12-month trends and verified supplier "
             f"documents across the nutraceutical catalogue.</p>"
             f"<ul><li>67 ingredients</li><li>48 verified suppliers</li>"
             f"<li>12-month price history</li></ul></div></div>"
-            f"<div class=pane-r><div class=card>"
+            f"<div class='pane pane-r'><div class=card>"
             f"<div class=mob>ingre<span>x</span></div>"
             f"{head}"
             f"{f'<div class=err>{E(err)}</div>' if err else ''}"
             f"{google}{form}"
             f"<div class=fine>By continuing you agree to Ingrex's terms and privacy policy. "
             f"Prices shown are indicative market bands, not live quotes.</div>"
-            f"</div></div></div></html>").encode()
+            f"</div></div></div>{SHADER_JS}</html>").encode()
 
 
 WELCOME_CSS = """
@@ -3000,42 +3094,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _serve_video(self):
-        try:
-            size = os.path.getsize(LOGIN_VIDEO)
-            f = open(LOGIN_VIDEO, "rb")
-        except OSError:
-            return self._send(b"video not found", 404)
-        rng = self.headers.get("Range", "")
-        start, end = 0, size - 1
-        if rng.startswith("bytes="):          # Safari requires 206 range replies
-            s, _, e = rng[6:].partition("-")
-            start = int(s) if s.isdigit() else 0
-            end = int(e) if e.isdigit() else size - 1
-            end = min(end, size - 1)
-            start = min(start, end)
-        length = end - start + 1
-        self.send_response(206 if rng else 200)
-        if rng:
-            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-        self.send_header("Content-Type", "video/mp4")
-        self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Cache-Control", "public, max-age=604800")
-        self.send_header("Content-Length", str(length))
-        self.end_headers()
-        f.seek(start)
-        remaining = length
-        while remaining > 0:
-            chunk = f.read(min(65536, remaining))
-            if not chunk:
-                break
-            try:
-                self.wfile.write(chunk)
-            except (BrokenPipeError, ConnectionResetError):
-                break
-            remaining -= len(chunk)
-        f.close()
-
     def _oauth_redirect(self):
         """Callback URL for this deployment — must match what's registered with Google."""
         proto = self.headers.get("X-Forwarded-Proto", "").split(",")[0].strip() or "http"
@@ -3049,8 +3107,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(url.query)
-        if url.path == "/bg.mp4":
-            return self._serve_video()
         if url.path == "/app.css":
             return self._send(CSS.encode(), ctype="text/css; charset=utf-8",
                               cache="public, max-age=31536000, immutable")
