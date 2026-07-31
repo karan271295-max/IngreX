@@ -4,6 +4,7 @@
 Single file, stdlib only. Run:  python3 ingrex.py   ->  http://localhost:8000
 Self-check:                     python3 ingrex.py --test
 """
+import gzip
 import hashlib
 import hmac
 import html
@@ -41,6 +42,23 @@ BUSINESS_ROLES = ["Contract Manufacturer", "Brand / Client", "Raw Material Manuf
 # Only buyers (those purchasing from suppliers) may review suppliers.
 BUYER_ROLES = {"Contract Manufacturer", "Brand / Client", "Distributor"}
 REQUEST_STATUS = ["Open", "In progress", "Sourcing vendor", "Fulfilled", "Closed"]
+
+# Subscription. First month is free for every new account; after that a plan is
+# needed. Billing itself is handled offline by the team — the portal only records
+# which plan an account picked (no card data ever touches this app).
+TRIAL_DAYS = 30
+PLANS = [
+    # key, name, ₹/month billed monthly, ₹/month billed yearly, blurb, features
+    ("starter", "Starter", 4999, 3999, "For small brands sourcing a few ingredients.",
+     ["Full ingredient catalogue", "Vendor price bands", "5 sourcing requests / month",
+      "Watchlist + price alerts", "Email support"]),
+    ("growth", "Growth", 12999, 9999, "For contract manufacturers buying at scale.",
+     ["Everything in Starter", "Unlimited sourcing requests", "12-month price history + trends",
+      "CSV export of any search", "Supplier documents (COA, MSDS, GMP)", "Priority support"]),
+    ("enterprise", "Enterprise", 0, 0, "For multi-plant buyers and distributors.",
+     ["Everything in Growth", "Dedicated sourcing manager", "Custom vendor onboarding",
+      "Contract price benchmarking", "API access", "SLA-backed support"]),
+]
 
 # Inferred material make / origin, shown on the ingredient page.
 MATERIAL_MAKE = {
@@ -247,11 +265,36 @@ class _PgConn:
         self.raw.commit()
 
     def close(self):
+        """Return to the idle pool instead of dropping the connection. Opening a
+        fresh psycopg2 connection to a hosted Postgres costs a TLS + auth round
+        trip; doing that per page request is most of the app's latency."""
+        try:
+            self.raw.rollback()          # never hand over a half-open transaction
+        except Exception:
+            try:
+                self.raw.close()
+            except Exception:
+                pass
+            return
+        with _PG_LOCK:
+            if len(_PG_POOL) < PG_POOL_MAX:
+                _PG_POOL.append(self)
+                return
         self.raw.close()
+
+
+PG_POOL_MAX = 8          # ponytail: fixed-size idle list, swap for pgbouncer if load grows
+_PG_POOL = []
+_PG_LOCK = threading.Lock()
 
 
 def connect():
     if PG:
+        with _PG_LOCK:
+            while _PG_POOL:                      # reuse a live idle connection
+                con = _PG_POOL.pop()
+                if not con.raw.closed:
+                    return con
         import psycopg2
         return _PgConn(psycopg2.connect(DATABASE_URL))
     con = sqlite3.connect(DB, timeout=10)
@@ -353,7 +396,8 @@ def ensure_invites(con):
         revoked INTEGER DEFAULT 0, created TEXT, vendor_id INTEGER)""")
     con.execute("""CREATE TABLE IF NOT EXISTS profile(
         code TEXT PRIMARY KEY, name TEXT, company TEXT, role TEXT,
-        gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT)""")
+        gst TEXT, city TEXT, completed INTEGER DEFAULT 0, created TEXT,
+        phone TEXT, plan TEXT DEFAULT '', cycle TEXT DEFAULT '')""")
     con.execute("""CREATE TABLE IF NOT EXISTS request(
         id INTEGER PRIMARY KEY, code TEXT, requester TEXT, company TEXT,
         ingredient TEXT NOT NULL, details TEXT, status TEXT DEFAULT 'Open',
@@ -366,6 +410,15 @@ def ensure_invites(con):
             con.execute("ALTER TABLE invite ADD COLUMN vendor_id INTEGER")
         if "blacklisted" not in [r[1] for r in con.execute("PRAGMA table_info(vendor)")]:
             con.execute("ALTER TABLE vendor ADD COLUMN blacklisted INTEGER DEFAULT 0")
+        have = [r[1] for r in con.execute("PRAGMA table_info(profile)")]
+        for col, decl in (("phone", "TEXT"), ("plan", "TEXT DEFAULT ''"),
+                          ("cycle", "TEXT DEFAULT ''")):
+            if col not in have:
+                con.execute(f"ALTER TABLE profile ADD COLUMN {col} {decl}")
+    else:        # Postgres: table may predate these columns, CREATE IF NOT EXISTS won't add them
+        for col, decl in (("phone", "TEXT"), ("plan", "TEXT DEFAULT ''"),
+                          ("cycle", "TEXT DEFAULT ''")):
+            con.execute(f"ALTER TABLE profile ADD COLUMN IF NOT EXISTS {col} {decl}")
     today = date.today().isoformat()
     admin = os.environ.get("INGREX_ADMIN_CODE", "").strip()
     if admin:
@@ -440,7 +493,9 @@ p{margin:0 0 11px}
   border-top:1px solid rgba(255,255,255,.07)}
 .av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;
   font-weight:700;font-size:11px;color:#fff;background:linear-gradient(135deg,#3a4a54,#1c2632)}
-.me .who{min-width:0;flex:1}
+.me .who{min-width:0;flex:1;text-decoration:none}
+.me .who:hover .nm{text-decoration:underline}
+a.av{text-decoration:none}
 .me .nm{color:#fff;font-size:12.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me .rl{color:rgba(255,255,255,.42);font-size:10.5px}
 .logout{flex:none;width:29px;height:29px;border-radius:8px;display:grid;place-items:center;
@@ -791,7 +846,61 @@ footer{padding:20px 28px;color:var(--mut);font-size:12px;border-top:1px solid va
   .nav-link{padding:8px 12px}.nav-badge{display:none}
   .top{padding:12px 16px}.wrap{padding:20px 16px 48px}
   .stats{grid-template-columns:1fr 1fr}.hi h1{font-size:22px}
-}"""
+}
+
+/* trial strip + plans + account */
+.trial{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;
+  padding:10px 14px;border-radius:12px;font-size:13px;font-weight:600;
+  background:linear-gradient(90deg,#e7f4ee,#f4f7f5);border:1px solid #d7e8df;color:var(--acc-d)}
+.trial.warn{background:linear-gradient(90deg,#fbe9df,#fdf5f0);border-color:#e6c3ad;color:#b4541c}
+.trial b{font-weight:800}
+.trial a{margin-left:auto;font-weight:800;white-space:nowrap}
+.trial .pin{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  padding:3px 8px;border-radius:20px;background:rgba(13,122,86,.12)}
+.trial.warn .pin{background:rgba(180,84,28,.12)}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}
+@media(max-width:900px){.plans{grid-template-columns:1fr}}
+.plan{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);position:relative}
+.plan.best{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-t),var(--shadow)}
+.plan .tagbest{position:absolute;top:-11px;left:22px;font-size:10px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.06em;color:#fff;background:var(--acc);
+  padding:4px 10px;border-radius:20px}
+.plan h3{font-size:17px;margin-bottom:4px}
+.plan .blurb{color:var(--mut);font-size:12.5px;min-height:34px}
+.plan .amt{font-size:30px;font-weight:800;letter-spacing:-.03em;color:var(--ink);margin:12px 0 2px}
+.plan .amt small{font-size:13px;font-weight:600;color:var(--mut);letter-spacing:0}
+.plan .save{font-size:11.5px;font-weight:700;color:var(--acc-d);min-height:17px}
+.plan ul{list-style:none;margin:16px 0 20px;display:flex;flex-direction:column;gap:9px}
+.plan li{font-size:13px;display:flex;gap:8px;align-items:flex-start;color:var(--ink)}
+.plan li::before{content:'✓';color:var(--acc);font-weight:800;flex:none}
+.plan form{margin-top:auto}.plan button{width:100%}
+.plan .ghost{width:100%;display:block;text-align:center;padding:11px;border-radius:10px;
+  border:1px solid var(--line);font-weight:700;font-size:13px;color:var(--ink);background:#fff}
+.plan .ghost:hover{background:var(--bg)}
+.plan .onplan{width:100%;text-align:center;padding:11px;border-radius:10px;font-weight:700;
+  font-size:13px;background:var(--acc-t);color:var(--acc-d);border:1px solid #d7e8df}
+/* billing-cycle switch: pure CSS, radios drive both the pill and the prices */
+.cyc{display:inline-flex;background:var(--line2);border:1px solid var(--line);
+  border-radius:20px;padding:3px;gap:2px}
+.cyc label{font-size:12.5px;font-weight:700;color:var(--mut);padding:6px 15px;
+  border-radius:20px;cursor:pointer;user-select:none}
+#cyc-m,#cyc-y{position:absolute;opacity:0;pointer-events:none}
+#cyc-m:checked~.cyc label[for=cyc-m],#cyc-y:checked~.cyc label[for=cyc-y]{
+  background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+#cyc-m:checked~.plans .yr,#cyc-y:checked~.plans .mo{display:none}
+.acct{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.acct{grid-template-columns:1fr}}
+.acct .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:620px){.acct .grid2{grid-template-columns:1fr}}
+.fl{display:block;font-size:11px;font-weight:700;color:var(--mut);margin-bottom:5px}
+.acct input,.acct select{width:100%}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;
+  border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}.kv .k{color:var(--mut);font-weight:600}
+.kv .v{font-weight:700;color:var(--ink);text-align:right}
+.ok{background:var(--acc-t);border:1px solid #d7e8df;color:var(--acc-d);font-size:13px;
+  font-weight:700;padding:10px 13px;border-radius:10px;margin-bottom:14px}"""
 
 CSS_HASH = hashlib.md5(CSS.encode()).hexdigest()[:8]  # cache-bust /app.css on edit
 
@@ -861,9 +970,11 @@ def sidebar(active):
             f"<span class=nm>ingre<span>x</span>"
             f"<small>Nutraceutical sourcing</small></span></a></div>"
             f"{nav}"
-            f"<div class=me><span class=av>{E(initials(name))}</span>"
-            f"<span class=who><span class=nm>{E(name)}</span><br>"
-            f"<span class=rl>{role}</span></span>"
+            f"<div class=me><a class=av href='/account' title='Account settings'>"
+            f"{E(initials(name))}</a>"
+            f"<a class=who href='/account' title='Account settings'>"
+            f"<span class=nm>{E(name)}</span><br>"
+            f"<span class=rl>{role}</span></a>"
             f"<a class=logout href='/logout' title='Log out' aria-label='Log out'>"
             f"<svg viewBox='0 0 24 24'><path d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3'/></svg>"
             f"</a></div></aside>")
@@ -890,7 +1001,7 @@ def topbar(con, q=""):
             f"<form method=get action='/search' autocomplete=off>"
             f"<svg viewBox='0 0 24 24'><circle cx=11 cy=11 r=7/><path d='M21 21l-4.3-4.3'/></svg>"
             f"<input id=topsearch name=q value='{E(q)}' autocomplete=off spellcheck=false "
-            f"placeholder='Search ingredients, suppliers, CAS no., etc.'>"
+            f"placeholder='Search ingredients, suppliers, CAS no.…   (press / )'>"
             f"<div id=sgbox class=sgbox></div></form>"
             f"<span class=grow></span>"
             f"<span class=live title='Users active in the last 5 minutes'>"
@@ -949,8 +1060,29 @@ if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,items.length-1);re
 else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);render();}
 else if(e.key==='Enter'&&sel>=0){e.preventDefault();location=items[sel].h;}
 else if(e.key==='Escape'){hide();}});
-document.addEventListener('click',function(e){if(!inp.parentNode.contains(e.target))hide();});})();
+document.addEventListener('click',function(e){if(!inp.parentNode.contains(e.target))hide();});
+document.addEventListener('keydown',function(e){
+if(e.key!=='/'||e.metaKey||e.ctrlKey)return;var a=document.activeElement;
+if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;e.preventDefault();inp.focus();inp.select();});})();
 </script>"""
+
+def trial_strip(con):
+    """Free-trial / plan banner. Nothing to show for admin, suppliers or paid accounts."""
+    plan, cycle, left = subscription(con)
+    if plan:
+        return ""
+    if left is None:                     # admin, supplier or open dev mode
+        return ""
+    if left > 0:
+        warn = " warn" if left <= 7 else ""
+        return (f"<div class='trial{warn}'><span class=pin>Free trial</span>"
+                f"<span><b>{left} day{'' if left == 1 else 's'} left</b> of your first month — "
+                f"full access, no card needed.</span>"
+                f"<a href='/plans'>See plans →</a></div>")
+    return ("<div class='trial warn'><span class=pin>Trial ended</span>"
+            "<span>Your free month is over. Pick a plan to keep sourcing without limits.</span>"
+            "<a href='/plans'>Choose a plan →</a></div>")
+
 
 def page(con, title, body, active="dashboard", q=""):
     return (f"<!doctype html><html lang=en><meta charset=utf-8>"
@@ -958,7 +1090,8 @@ def page(con, title, body, active="dashboard", q=""):
             f"<title>{E(title)} · Ingrex</title>"
             f"<link rel=stylesheet href='/app.css?v={CSS_HASH}'>"
             f"<div class=shell>{sidebar(active)}"
-            f"<div class=content>{topbar(con, q)}<main class=wrap>{body}</main>"
+            f"<div class=content>{topbar(con, q)}"
+            f"<main class=wrap>{trial_strip(con)}{body}</main>"
             f"<footer>Ingrex · B2B nutraceutical ingredient portal. "
             f"Pilot preview — prices and ratings are sample data, not live quotes.</footer>"
             f"</div></div>{NOTIF_JS}{TREND_JS}{SEARCH_JS}</html>").encode()
@@ -1051,8 +1184,20 @@ def moves_map(con):
     return {m["id"]: m["pct"] for m in market_movers(con, limit=999)}
 
 
+_MOVES = (0.0, None)     # (computed_at, moves) — see market_movers
+
+
 def market_movers(con, limit=6):
-    """Month-over-month market price change per ingredient, biggest first."""
+    """Month-over-month market price change per ingredient, biggest first.
+
+    Every page hits this 2-3 times (KPI cards, movers panel, the bell feed) and it
+    scans the whole price history each time — one network round trip per call once
+    the DB is remote. Prices move monthly, so a short cache costs nothing real.
+    ponytail: 60s process-local TTL; swap for invalidate-on-write if prices ever go live."""
+    global _MOVES
+    at, cached = _MOVES
+    if cached is not None and time.time() - at < 60:
+        return cached[:limit]
     rows = con.execute("""
         SELECT p.ingredient_id id, i.name, i.unit, p.month, p.price
         FROM price_point p JOIN ingredient i ON i.id=p.ingredient_id
@@ -1070,6 +1215,7 @@ def market_movers(con, limit=6):
         moves.append({"id": pts[-1]["id"], "name": pts[-1]["name"], "unit": pts[-1]["unit"],
                       "price": cur, "pct": (cur - prev) / prev * 100})
     moves.sort(key=lambda m: abs(m["pct"]), reverse=True)
+    _MOVES = (time.time(), moves)
     return moves[:limit]
 
 
@@ -1338,6 +1484,10 @@ def view_search(con, params, wl=frozenset()):
     qs = urllib.parse.urlencode({k: v for k, v in
                                  [("q", q), ("kind", kind), ("doc", doc), ("maxp", raw)] if v})
     back = "/search" + (f"?{qs}" if qs else "")
+    export_link = (f"<a href='/export.csv{'?' + qs if qs else ''}' "
+                   f"style='margin-left:auto;font-weight:700;font-size:12.5px' "
+                   f"title='Download these results as a spreadsheet'>↓ Export CSV</a>"
+                   if rows else "")
     cats = {r["category"] for r in con.execute("SELECT DISTINCT category FROM ingredient")}
     opts = lambda vals, sel, label: (
         f"<option value=''>{label}</option>" +
@@ -1354,7 +1504,10 @@ def view_search(con, params, wl=frozenset()):
         <input name=maxp inputmode=decimal placeholder='Max ₹/unit' value='{E(raw)}' style='width:150px'>
         <button>Search</button>
       </form></div>
-      <h2>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
+      <div style='display:flex;align-items:baseline;gap:12px;flex-wrap:wrap'>
+        <h2 style='margin-bottom:0'>{len(rows)} ingredient{'' if len(rows) == 1 else 's'}</h2>
+        {export_link}
+      </div>
       {(f'''<div class=tablewrap><table class=itable>
         <thead><tr><th></th><th>Ingredient</th><th>Price range</th><th>Suppliers</th>
           <th>12-mo</th><th>Updated</th></tr></thead>
@@ -1365,6 +1518,27 @@ def view_search(con, params, wl=frozenset()):
         f"Raise a sourcing request and our purchase team will find a supplier for you.</p>"
         f"<a class=vbook href='/requests?ing={urllib.parse.quote(q)}'>Request this ingredient</a></div>"}"""
     return page(con, "Search", body, active="search", q=q)
+
+
+def export_csv(con, params):
+    """Search results as a CSV a buyer can drop straight into a costing sheet."""
+    import csv
+    import io
+    rows = search_ingredients(con, params.get("q", [""])[0].strip(),
+                              params.get("kind", [""])[0] if params.get("kind", [""])[0] in VENDOR_KINDS else "",
+                              params.get("doc", [""])[0] if params.get("doc", [""])[0] in DOC_TYPES else "",
+                              None)
+    mv = moves_map(con)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Ingredient", "Category", "CAS", "Suppliers", "Price low",
+                "Price high", "Unit", "12-mo change %", "Last updated"])
+    for r in rows:
+        pct = mv.get(r["id"])
+        w.writerow([r["name"], r["category"], r["cas"], r["vendors"],
+                    f"{r['lo']:.0f}" if r["lo"] else "", f"{r['hi']:.0f}" if r["hi"] else "",
+                    r["unit"], f"{pct:.1f}" if pct is not None else "", r["updated"] or ""])
+    return buf.getvalue().encode("utf-8-sig")   # BOM so Excel reads ₹ names correctly
 
 
 def irow(r, wl=frozenset(), back="/search", mv=None):
@@ -1612,6 +1786,159 @@ def view_requests(con, prefill="", msg=""):
       <h2>Community board ({len(active)} open)</h2>
       {board or "<div class='panel pad'><p class=empty>No open requests. Raise one above.</p></div>"}"""
     return page(con, "Sourcing requests", body, active="requests")
+
+
+def view_plans(con, msg=""):
+    plan, cycle, left = subscription(con)
+    max_save = max(round((1 - yr / mo) * 100) for _, _, mo, yr, *_ in PLANS if mo)
+    cards = ""
+    for i, (key, nm, mo, yr, blurb, feats) in enumerate(PLANS):
+        best = " best" if key == "growth" else ""
+        if mo:
+            save = round((1 - yr / mo) * 100)
+            price = (f"<div class='amt mo'>₹{mo:,}<small> /month</small></div>"
+                     f"<div class='amt yr'>₹{yr:,}<small> /month</small></div>"
+                     f"<div class='save mo'>&nbsp;</div>"
+                     f"<div class='save yr'>Save {save}% — billed ₹{yr * 12:,} yearly</div>")
+        else:
+            price = ("<div class=amt>Custom<small> /month</small></div>"
+                     "<div class=save>Priced to your volume</div>")
+        feat_html = "".join(f"<li>{E(f)}</li>" for f in feats)
+        if plan == key:
+            action = "<div class=onplan>Your current plan</div>"
+        elif mo:
+            # one form per cycle — the hidden one is display:none, so only the
+            # visible cycle's button can be clicked (and only its value posts)
+            action = "".join(
+                f"<form method=post action='/plans' class={c}>"
+                f"<input type=hidden name=plan value='{key}'>"
+                f"<input type=hidden name=cycle value='{cy}'>"
+                f"<button>Choose {E(nm)}</button></form>"
+                for c, cy in (("mo", "monthly"), ("yr", "yearly")))
+        else:
+            action = "<a class=ghost href='/requests'>Talk to sales</a>"
+        cards += (f"<div class='plan{best}'>"
+                  f"{'<span class=tagbest>Most popular</span>' if best else ''}"
+                  f"<h3>{E(nm)}</h3><div class=blurb>{E(blurb)}</div>"
+                  f"{price}<ul>{feat_html}</ul>{action}</div>")
+
+    if msg:
+        head = ""                       # the confirmation already says which plan is live
+    elif plan:
+        head = (f"<div class=ok>You're on <b>{E(plan_name(plan))}</b>, billed "
+                f"{E(cycle or 'monthly')}. Changing plan? Pick one below — "
+                f"our team will confirm before anything is charged.</div>")
+    elif left:
+        head = (f"<div class=ok>You have <b>{left} day{'' if left == 1 else 's'}</b> left on your "
+                f"free month. Pick a plan any time — it starts when the trial ends.</div>")
+    else:
+        head = ""
+    body = f"""
+      <div class=hi><h1>Plans &amp; billing</h1>
+        <div class=sub>Every account starts with a free month. No card up front, cancel any time.</div></div>
+      {f"<div class=ok>{E(msg)}</div>" if msg else ""}{head}
+      <input type=radio name=cyc id=cyc-m checked><input type=radio name=cyc id=cyc-y>
+      <div class=cyc><label for=cyc-m>Monthly</label>
+        <label for=cyc-y>Yearly · save up to {max_save}%</label></div>
+      <div class=plans>{cards}</div>
+      <div class='panel pad' style='margin-top:18px'>
+        <div class=ph><h3>How billing works</h3></div>
+        <div class=metaline style='margin-top:8px'>Your first month is free from the day you join —
+          full access to the catalogue, price bands and sourcing requests. Picking a plan here tells
+          our team which one you want; we confirm by email and raise an invoice (NEFT / UPI / card
+          on the invoice). No payment details are ever entered into this portal.</div>
+      </div>"""
+    return page(con, "Plans", body, active="account")
+
+
+def view_account(con, msg=""):
+    ident = current()
+    p = account(con)
+    plan, cycle, left = subscription(con)
+    v = lambda k: E((p[k] or "") if p and k in p.keys() else "")
+    roles = "".join(f"<option{' selected' if p and p['role'] == r else ''}>{E(r)}</option>"
+                    for r in BUSINESS_ROLES)
+    if plan:
+        status = f"{E(plan_name(plan))} · billed {E(cycle or 'monthly')}"
+    elif left:
+        status = f"Free trial · {left} day{'' if left == 1 else 's'} left"
+    elif left == 0:
+        status = "Trial ended"
+    else:
+        status = "Admin access"
+    n_watch = "—"
+    reviews = requests_n = 0
+    if ident:
+        reviews = con.execute("SELECT COUNT(*) n FROM rating WHERE rater=?",
+                              (ident["note"] or "",)).fetchone()["n"]
+        requests_n = con.execute("SELECT COUNT(*) n FROM request WHERE code=?",
+                                 (ident["code"],)).fetchone()["n"]
+    form = (f"""
+      <div class='panel pad'>
+        <div class=ph><h3>Your details</h3></div>
+        <form method=post action='/account' style='margin-top:14px'>
+          <div class=grid2>
+            <div><label class=fl>Full name</label>
+              <input name=name required maxlength=80 value='{v('name')}'></div>
+            <div><label class=fl>Company / organisation</label>
+              <input name=company required maxlength=120 value='{v('company')}'></div>
+            <div><label class=fl>Business type</label>
+              <select name=role required>{roles}</select></div>
+            <div><label class=fl>GSTIN</label>
+              <input name=gst maxlength=15 value='{v('gst')}'
+                style='text-transform:uppercase'></div>
+            <div><label class=fl>City</label>
+              <input name=city maxlength=60 value='{v('city')}'></div>
+            <div><label class=fl>Phone</label>
+              <input name=phone maxlength=20 value='{v('phone')}'
+                placeholder='Optional — for quote callbacks'></div>
+          </div>
+          <button style='margin-top:14px'>Save changes</button>
+        </form>
+      </div>""" if p else
+      "<div class='panel pad'><p class=empty>Admin and supplier logins don't carry a buyer "
+      "profile. Sign in with an invited buyer account to edit these details.</p></div>")
+    body = f"""
+      <div class=hi><h1>Account settings</h1>
+        <div class=sub>Your details, plan and activity on Ingrex.</div></div>
+      {f"<div class=ok>{E(msg)}</div>" if msg else ""}
+      <div class=acct>
+        {form}
+        <div style='display:flex;flex-direction:column;gap:16px'>
+          <div class='panel pad'>
+            <div class=ph><h3>Plan</h3><a href='/plans'>Change →</a></div>
+            <div style='margin-top:10px'>
+              <div class=kv><span class=k>Status</span><span class=v>{status}</span></div>
+              <div class=kv><span class=k>Signed in as</span>
+                <span class=v>{E(ident['note'] if ident else 'Guest')}</span></div>
+              <div class=kv><span class=k>Invite code</span>
+                <span class=v><code class=inv>{E(ident['code'] if ident else '—')}</code></span></div>
+              <div class=kv><span class=k>Member since</span>
+                <span class=v>{v('created') or '—'}</span></div>
+            </div>
+          </div>
+          <div class='panel pad'>
+            <div class=ph><h3>Your activity</h3></div>
+            <div style='margin-top:10px'>
+              <div class=kv><span class=k>Supplier reviews written</span>
+                <span class=v>{reviews}</span></div>
+              <div class=kv><span class=k>Sourcing requests raised</span>
+                <span class=v>{requests_n}</span></div>
+              <div class=kv><span class=k>Watchlist</span>
+                <span class=v><a href='/watchlist'>View →</a></span></div>
+            </div>
+          </div>
+          <div class='panel pad'>
+            <div class=ph><h3>Session</h3></div>
+            <div class=metaline style='margin:8px 0 12px'>Signing out clears this device's
+              access. Your watchlist stays on this browser.</div>
+            <a class=ghost href='/logout'
+              style='display:inline-block;padding:9px 16px;border:1px solid var(--line);
+                     border-radius:9px;font-weight:700;font-size:13px'>Log out</a>
+          </div>
+        </div>
+      </div>"""
+    return page(con, "Account", body, active="account")
 
 
 def view_insights(con):
@@ -2164,6 +2491,36 @@ def profile_done(con, code):
     return bool(r and r["completed"])
 
 
+def account(con):
+    """Profile row for the signed-in account, or None (admin / supplier / open dev)."""
+    ident = current()
+    if not ident:
+        return None
+    return con.execute("SELECT * FROM profile WHERE code=?", (ident["code"],)).fetchone()
+
+
+def _days_since(iso):
+    try:
+        return (date.today() - date.fromisoformat(iso)).days
+    except (TypeError, ValueError):
+        return 0
+
+
+def subscription(con):
+    """(plan_key, cycle, trial_days_left). plan_key '' means still on the free trial."""
+    p = account(con)
+    if not p:
+        return ("", "", None)
+    plan = (p["plan"] or "") if "plan" in p.keys() else ""
+    cycle = (p["cycle"] or "") if "cycle" in p.keys() else ""
+    left = max(0, TRIAL_DAYS - _days_since(p["created"]))
+    return (plan, cycle, left)
+
+
+def plan_name(key):
+    return next((n for k, n, *_ in PLANS if k == key), "")
+
+
 def current_role(con):
     ident = current()
     if not ident:
@@ -2347,10 +2704,25 @@ render();})();
 
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "ingrex/0.1"
+    # HTTP/1.1 keeps the TCP+TLS connection open across requests. On HTTP/1.0 the
+    # browser re-handshakes for every page, stylesheet and /suggest call, which
+    # costs a round trip each behind Render's TLS terminator. Every response below
+    # must send a Content-Length (or the client waits for EOF that never comes).
+    protocol_version = "HTTP/1.1"
 
-    def _send(self, body, code=200):
+    def _send(self, body, code=200, ctype="text/html; charset=utf-8", cache="", extra=()):
+        # pages are 25-50KB of repetitive markup; gzip cuts that ~7x on the wire
+        gz = len(body) > 900 and "gzip" in self.headers.get("Accept-Encoding", "")
+        if gz:
+            body = gzip.compress(body, 5)
         self.send_response(code)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", ctype)
+        if gz:
+            self.send_header("Content-Encoding", "gzip")
+        if cache:
+            self.send_header("Cache-Control", cache)
+        for k, v in extra:
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -2360,21 +2732,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Location", target)
         if cookie:
             self.send_header("Set-Cookie", cookie)
+        self.send_header("Content-Length", "0")   # keep-alive needs an explicit length
         self.end_headers()
 
     def do_HEAD(self):        # health checks / port scans (Render probes with HEAD)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", "0")
         self.end_headers()
-
-    def _send_css(self):
-        body = CSS.encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "text/css; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
-        self.end_headers()
-        self.wfile.write(body)
 
     def _serve_video(self):
         try:
@@ -2422,7 +2787,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if url.path == "/bg.mp4":
             return self._serve_video()
         if url.path == "/app.css":
-            return self._send_css()
+            return self._send(CSS.encode(), ctype="text/css; charset=utf-8",
+                              cache="public, max-age=31536000, immutable")
         con = connect()
         try:
             gated = gate_active(con)
@@ -2439,13 +2805,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             touch_online(f"{ident['code'] if ident else 'anon'}|{self._client_ip()}",
                          ident["note"] if ident else "Guest", ident["code"] if ident else "",
                          self._client_ip(), is_admin())
+            if url.path == "/export.csv":
+                return self._send(export_csv(con, params), ctype="text/csv; charset=utf-8",
+                                  extra=[("Content-Disposition",
+                                          "attachment; filename=ingrex-ingredients.csv")])
             if url.path == "/suggest":
                 body = json.dumps(suggest(con, params.get("q", [""])[0][:60])).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                return self.wfile.write(body)
+                return self._send(body, ctype="application/json")
             # onboarding: invited (non-admin, non-supplier) buyers complete a profile first.
             # If a signed profile cookie survives a DB reset, restore it silently.
             if ident and not is_admin() and not is_supplier() and not profile_done(con, ident["code"]):
@@ -2491,6 +2857,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif url.path == "/requests":
                 out = view_requests(con, params.get("ing", [""])[0][:140],
                                     params.get("msg", [""])[0][:80])
+            elif url.path == "/account":
+                out = view_account(con, params.get("msg", [""])[0][:120])
+            elif url.path == "/plans":
+                out = view_plans(con, params.get("msg", [""])[0][:120])
             elif url.path == "/admin":
                 out = view_admin(con) if (is_admin() or not gated) else None
             elif m := re.fullmatch(r"/ingredient/(\d+)", url.path):
@@ -2572,6 +2942,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                 (int(rid), name, company, note, date.today().isoformat()))
                     con.commit()
                 return self._redirect(f"/requests#r{rid}")
+            if path == "/account":
+                ident = current()
+                f = urllib.parse.parse_qs(body)
+                g = lambda k: f.get(k, [""])[0].strip()
+                name, company = g("name")[:80], g("company")[:120]
+                if ident and name and company:
+                    role = g("role") if g("role") in BUSINESS_ROLES else ""
+                    d = {"name": name, "company": company, "role": role,
+                         "gst": g("gst").upper()[:15], "city": g("city")[:60]}
+                    con.execute("UPDATE profile SET name=?,company=?,role=?,gst=?,city=?,phone=? "
+                                "WHERE code=?",
+                                (name, company, role, d["gst"], d["city"],
+                                 g("phone")[:20], ident["code"]))
+                    con.execute("UPDATE invite SET note=? WHERE code=?", (name, ident["code"]))
+                    con.commit()
+                    return self._redirect("/account?msg=" + urllib.parse.quote("Details saved."),
+                                          prof_cookie(d))   # survives DB resets
+                return self._redirect("/account")
+            if path == "/plans":
+                ident = current()
+                f = urllib.parse.parse_qs(body)
+                plan = f.get("plan", [""])[0]
+                cycle = f.get("cycle", [""])[0]
+                if ident and plan in [p[0] for p in PLANS] and cycle in ("monthly", "yearly"):
+                    con.execute("UPDATE profile SET plan=?, cycle=? WHERE code=?",
+                                (plan, cycle, ident["code"]))
+                    con.commit()
+                    return self._redirect("/plans?msg=" + urllib.parse.quote(
+                        f"{plan_name(plan)} selected, billed {cycle}. Our team will confirm by "
+                        f"email before anything is charged — nothing is billed today."))
+                return self._redirect("/plans")
             if path == "/request_close":
                 f = urllib.parse.parse_qs(body)
                 rid = f.get("id", ["0"])[0]
@@ -2716,6 +3117,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def demo():
     """Self-check: run against a throwaway DB."""
     import tempfile
+    global _MOVES
+    _MOVES = (0.0, None)          # don't inherit a cache from another DB
     tmp = os.path.join(tempfile.mkdtemp(), "t.db")
     con = init_db(tmp)
 
@@ -2824,6 +3227,43 @@ def demo():
     CTX.ident = None
     con.execute("DELETE FROM invite WHERE code IN ('SUP1','GATE')")
     con.commit()
+
+    # trial + plans: 30 free days from the profile's join date, then a plan is needed
+    con.execute("INSERT INTO invite(code,note,created) VALUES('BUY1','Riya','d')")
+    con.execute("INSERT OR REPLACE INTO profile(code,name,company,role,gst,city,completed,created)"
+                " VALUES('BUY1','Riya','Acme','Brand / Client','G','Pune',1,?)",
+                (date.today().isoformat(),))
+    con.commit()
+    CTX.ident = identity(con, {"Cookie": f"{COOKIE}=BUY1.{sign_code('BUY1')}"})
+    assert subscription(con) == ("", "", TRIAL_DAYS), "fresh account gets a full free month"
+    assert b"Free trial" in view_account(con), "account page shows trial status"
+    assert b"day" in trial_strip(con).encode(), "trial banner counts days left"
+    # an old join date exhausts the trial and flips the banner to the upgrade prompt
+    old = date.fromordinal(date.today().toordinal() - (TRIAL_DAYS + 5)).isoformat()
+    con.execute("UPDATE profile SET created=? WHERE code='BUY1'", (old,))
+    con.commit()
+    assert subscription(con)[2] == 0, "trial expires after TRIAL_DAYS"
+    assert b"Trial ended" in trial_strip(con).encode()
+    # picking a plan clears the banner and shows on both plan + account pages
+    con.execute("UPDATE profile SET plan='growth', cycle='yearly' WHERE code='BUY1'")
+    con.commit()
+    assert subscription(con)[:2] == ("growth", "yearly")
+    assert trial_strip(con) == "", "paid account sees no trial banner"
+    assert b"Your current plan" in view_plans(con) and b"Growth" in view_account(con)
+    assert plan_name("growth") == "Growth" and plan_name("nope") == ""
+    # yearly is cheaper per month than monthly on every priced tier
+    assert all(yr < mo for _, _, mo, yr, *_ in PLANS if mo), "yearly must undercut monthly"
+    CTX.ident = None
+    con.execute("DELETE FROM invite WHERE code='BUY1'")
+    con.execute("DELETE FROM profile WHERE code='BUY1'")
+    con.commit()
+    assert subscription(con) == ("", "", None), "no profile (admin/dev) => no trial clock"
+
+    # CSV export mirrors the search filters and is spreadsheet-readable
+    csv_all = export_csv(con, {})
+    assert csv_all.startswith(b"\xef\xbb\xbf"), "BOM so Excel opens it as UTF-8"
+    assert csv_all.count(b"\r\n") == len(search_ingredients(con)) + 1, "header + one row each"
+    assert len(export_csv(con, {"q": ["whey"]})) < len(csv_all), "query narrows the export"
 
     # market movers + notifications feed derive from real price history
     mv = market_movers(con)
